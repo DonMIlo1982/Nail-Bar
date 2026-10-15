@@ -345,7 +345,7 @@ function defaults(){return{
     {id:uid(),type:'service',name:'False nails',category:'Hands',cost:0,price:1200,duration:90},
     {id:uid(),type:'product',name:'Cuticle oil (sample)',category:'Retail',code:'',cost:60,price:150,qty:12,low:3}
   ],
-  clients:[],sales:[],bookings:[],vouchers:[],cashups:[],users:[],log:[],roster:{},nextInv:1001,cart:emptyCart()};}
+  clients:[],sales:[],bookings:[],vouchers:[],cashups:[],users:[],log:[],refunds:[],roster:{},nextInv:1001,cart:emptyCart()};}
 /* bring data from older versions (or backups) up to the current shape */
 function migrate(s){
   const d=defaults();
@@ -353,7 +353,7 @@ function migrate(s){
   if(!Array.isArray(s.settings.hours)||s.settings.hours.length!==7)s.settings.hours=defaultHours();
   s.cart=Object.assign(emptyCart(),s.cart||{});if(!Array.isArray(s.cart.payments))s.cart.payments=[];delete s.cart.method;
   if(!Array.isArray(s.cart.held))s.cart.held=[];if(!s.cart.tabs||typeof s.cart.tabs!=='object')s.cart.tabs={};
-  ['items','techs','clients','sales','bookings','vouchers','cashups','users','log'].forEach(k=>{if(!Array.isArray(s[k]))s[k]=d[k]||[]});
+  ['items','techs','clients','sales','bookings','vouchers','cashups','users','log','refunds'].forEach(k=>{if(!Array.isArray(s[k]))s[k]=d[k]||[]});
   /* the old single owner PIN becomes an Owner login */
   if(s.settings.pin){if(!s.users.length)s.users.push({id:'u'+uid(),name:'Owner',pin:s.settings.pin,role:'owner',perms:[],active:true});delete s.settings.pin;}
   if(!s.settings.logoutMin)s.settings.logoutMin=15;
@@ -1158,9 +1158,12 @@ function renderReports(m){
   const label=new Date(repMonth+'-01T00:00').toLocaleDateString('en-ZA',{month:'long',year:'numeric'});
   const stat=(k,v)=>`<div class="stat"><b>${v}</b><span>${k}</span></div>`;
   const mt=methodTotals(sales);const vouchers=state.vouchers.filter(v=>vStatus(v)==='active');
+  /* voucher refunds paid out this month come off the money received */
+  const mRefunds=state.refunds.filter(r=>r.day.slice(0,7)===repMonth);mRefunds.forEach(r=>{mt[r.method]=r2((mt[r.method]||0)-r.amount);});
+  const refundSum=r2(mRefunds.reduce((a,r)=>a+r.amount,0));vsold=r2(vsold-refundSum);
   m.innerHTML=`<div class="page">
     <div class="page-head"><h1>Reports for ${label}</h1><label class="fld inline">Month<input id="rep-month" type="month" value="${repMonth}"></label></div>
-    <div class="stats">${stat('Turnover',R(svc+prod))}${stat('Services',R(svc))}${stat('Products',R(prod))}${stat('Gross profit',R(svc+prod-cost))}${stat('Invoices',sales.length)}${stat('Gift vouchers sold',R(vsold))}${voided.length?stat('Voided invoices',voided.length):''}</div>
+    <div class="stats">${stat('Turnover',R(svc+prod))}${stat('Services',R(svc))}${stat('Products',R(prod))}${stat('Gross profit',R(svc+prod-cost))}${stat('Invoices',sales.length)}${stat(refundSum?'Gift vouchers sold (after refunds)':'Gift vouchers sold',R(vsold))}${voided.length?stat('Voided invoices',voided.length):''}</div>
     <p class="muted" style="font-size:13px;margin:6px 0 0">Turnover excludes gift vouchers sold (they count when they are spent) and voided invoices.</p>
     <div class="page-head"><h2>Turnover and commission by technician</h2><button data-act="csvTech">Export CSV</button></div>
     <div class="table-wrap"><table><thead><tr><th>Technician</th><th class="n">Clients</th><th class="n">Services done</th><th class="n">Services</th><th class="n">Products</th><th class="n">Total</th><th class="n">Commission</th><th class="bar-cell"></th></tr></thead><tbody>
@@ -1172,6 +1175,7 @@ function renderReports(m){
     <div class="table-wrap"><table><thead><tr><th>Method</th><th class="n">Amount</th></tr></thead><tbody>
     ${Object.entries(mt).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="n">${R(v)}</td></tr>`).join('')||'<tr><td colspan="2" class="muted">No sales this month yet.</td></tr>'}
     </tbody></table></div>
+    ${refundSum?`<p class="muted" style="font-size:13px;margin:6px 0 0">Amounts are after ${mRefunds.length} gift voucher refund${mRefunds.length===1?'':'s'} of ${R(refundSum)} in total.</p>`:''}
     <div class="page-head"><h2>Gift vouchers</h2><button data-act="tab" data-tab="vouchers">Open voucher register</button></div>
     <p class="muted" style="margin:0">Owed to clients on valid vouchers: <b>${R(vouchers.filter(v=>v.kind!=='issued').reduce((s,v)=>s+v.balance,0))}</b> sold, plus <b>${R(vouchers.filter(v=>v.kind==='issued').reduce((s,v)=>s+v.balance,0))}</b> on free vouchers. ${mt['Free voucher']?`Free vouchers spent this month: <b>${R(mt['Free voucher'])}</b> (included in turnover).`:''}</p>
     <div class="page-head"><h2>Stock on hand</h2><button data-act="csvStock">Export CSV</button></div>
@@ -1209,6 +1213,8 @@ ACT.todaySales=()=>{const list=state.sales.filter(s=>(s.day||s.date.slice(0,10))
 let voidApprover=null;
 ACT.voidSale=a=>need('void','void or refund a sale',ap=>{voidApprover=ap;const s=saleById(a.dataset.id);if(!s||s.voidedAt)return;
   const sold=s.lines.filter(l=>l.type==='voucher'&&l.code).map(l=>voucherByCode(l.code)).filter(Boolean);
+  const refunded=sold.filter(v=>v.refund);
+  if(refunded.length){toast(`Voucher ${refunded[0].code} on this invoice was already refunded, so voiding it would pay the client back twice`);return;}
   const used=sold.filter(v=>v.balance<v.amount-0.004);
   if(used.length){toast(`Voucher ${used[0].code} from this sale has already been used, so this invoice can’t be voided`);return;}
   openModal(`<h2>Void invoice ${s.no}?</h2><p class="muted" style="margin-top:-6px">${esc(s.client)} · ${R(s.total)} · ${esc(s.method)}</p>
@@ -1254,7 +1260,7 @@ function voucherSummaryHTML(v){
   const val=vStatus(v)==='unsold'?(+v.presetAmount?' · value '+R(v.presetAmount)+' when sold':''):v.amount?' · value '+R(v.amount):'';
   const changes=(v.changes||[]).map(c=>`<div class="trow"><span>${fmtD(c.at)} · ${esc(c.by||'?')}${c.approvedBy?' (approved by '+esc(c.approvedBy)+')':''} · ${esc(c.reason)}${c.toName!==c.fromName?` · name: ${esc(c.fromName||'–')} → ${esc(c.toName||'–')}`:''}</span><span>${c.to!==c.from?`${R(c.from)} → ${R(c.to)}`:''}</span></div>`).join('');
   return `<div style="margin-top:6px"><b>${esc(v.code)}</b> · ${vKind(v)}${val}${v.recipient?' · for '+esc(v.recipient):''}</div><div class="muted">${src}</div>
-    ${v.expires?`<div class="muted">Valid until ${fmtD(v.expires)}</div>`:''}${v.cancelReason?`<div class="muted">Cancelled${v.cancelledBy?' by '+esc(v.cancelledBy):''}: ${esc(v.cancelReason)}</div>`:''}
+    ${v.expires?`<div class="muted">Valid until ${fmtD(v.expires)}</div>`:''}${v.cancelReason?`<div class="muted">Cancelled${v.cancelledBy?' by '+esc(v.cancelledBy):''}${v.cancelledAt?' on '+fmtD(v.cancelledAt):''}: ${esc(v.cancelReason)}</div>`:''}${v.refund?`<div><b>Refunded ${R(v.refund.amount)} by ${esc(v.refund.method)}</b> on ${fmtD(v.refund.at)}${v.refund.by?' by '+esc(v.refund.by):''}</div>`:''}
     ${changes?`<div style="margin-top:8px"><b>Changes</b>${changes}</div>`:''}${uses?`<div style="margin-top:8px"><b>Used</b>${uses}</div>`:''}`;}
 function fillVoucherTable(){const el=$('#vr-body');if(!el)return;const q=normCode(vrSearch),t=vrSearch.toLowerCase().trim();
   const list=state.vouchers.filter(v=>(vrFilter==='all'||vStatus(v)===vrFilter)&&(!t||normCode(v.code).includes(q)&&q||[v.recipient,v.buyer,v.reason,String(v.saleNo||'')].some(x=>(x||'').toLowerCase().includes(t))||(v.uses||[]).some(u=>String(u.saleNo)===t)))
@@ -1342,13 +1348,27 @@ ACT.saveCards=()=>{const n=Math.min(200,Math.max(1,parseInt($('#mc-n').value)||0
   const batch=String(state.vouchers.filter(v=>v.batch).reduce((m,v)=>Math.max(m,+v.batch||0),0)+1);
   const made=[];for(let i=0;i<n;i++){const v={id:uid(),code:newVoucherCode(),kind:'sold',status:'unsold',batch,amount:0,balance:0,presetAmount:amt,recipient:rec,recipientId:(findClient(rec)||{}).id||null,created:now,createdBy:who(),uses:[]};state.vouchers.push(v);made.push(v);}
   logAct('Created voucher cards',`Batch ${batch}: ${n} card${n===1?'':'s'}${amt?' of '+R(amt):''}${rec?' for '+rec:''} (${made[0].code}${n>1?' … '+made[n-1].code:''})`);save();closeModal();render();printVouchers(made);toast(`${n} cards created`);};
-ACT.cancelVoucher=a=>{const v=state.vouchers.find(x=>x.id===a.dataset.id);if(!v)return;
-  need('vouchers','cancel vouchers',ap=>openModal(`<h2>Cancel voucher ${esc(v.code)}?</h2><p class="muted" style="margin-top:-6px">It can no longer be used. ${vStatus(v)==='active'?`Balance ${R(v.balance)} will be written off. If the client is being refunded, void the sale instead.`:''}</p>
-    <label class="fld">Reason<input id="cv-reason" autocomplete="off" placeholder="e.g. card lost, damaged"></label>
+/* a sold voucher with money left on it can be refunded when cancelled: the money
+   comes out of that day's cash-up under the method it was paid back by */
+const canRefund=v=>v.kind!=='issued'&&vStatus(v)==='active'&&v.balance>0.004;
+function refundMethodFor(v){const s=v.saleId&&saleById(v.saleId);const ms=s?salePayments(s).map(p=>p.method).filter(m=>['Cash','Card','EFT','Online'].includes(m)):[];
+  return ms.includes('Cash')?'Cash':ms[0]||'Cash';}
+ACT.cancelVoucher=a=>{const v=state.vouchers.find(x=>x.id===a.dataset.id);if(!v)return;const rf=canRefund(v);
+  need('vouchers','cancel vouchers',ap=>openModal(`<h2>Cancel voucher ${esc(v.code)}?</h2><p class="muted" style="margin-top:-6px">It can no longer be used.${vStatus(v)==='active'?` Unused balance: <b>${R(v.balance)}</b>${v.saleNo?` (sold on invoice ${v.saleNo}, ${fmtD(v.soldAt)})`:''}.`:''}</p>
+    ${rf?`<label class="vat-row" style="grid-column:auto"><input type="checkbox" id="cv-refund" checked>Give the client their ${R(v.balance)} back</label>
+    <label class="fld">Paid back by<select id="cv-method">${['Cash','Card','EFT','Online'].map(m=>`<option ${m===refundMethodFor(v)?'selected':''}>${m}</option>`).join('')}</select></label>
+    <p class="muted" style="font-size:13px;margin-top:-4px">The refund comes off today's cash-up, so the till balances. Untick it if the money is not being given back (the balance is then written off).</p>`:''}
+    <label class="fld">Reason<input id="cv-reason" autocomplete="off" placeholder="${rf?'e.g. client changed their mind':'e.g. card lost, damaged'}"></label>
     <div class="btns"><button class="danger" data-act="confirmCancelVoucher" data-id="${v.id}" data-ap="${ap?esc(ap.name):''}">Cancel voucher</button><button class="ghost" data-act="closeModal">Back</button></div>`));};
 ACT.confirmCancelVoucher=a=>{const v=state.vouchers.find(x=>x.id===a.dataset.id);const reason=$('#cv-reason').value.trim();if(!reason){toast('Add a reason');return;}
-  logAct('Cancelled voucher',`${v.code} (${V_LABEL[vStatus(v)]}${vStatus(v)==='active'?', balance '+R(v.balance):''}): ${reason}${a.dataset.ap&&a.dataset.ap!==who()?' (approved by '+a.dataset.ap+')':''}`);
-  Object.assign(v,{status:'cancelled',cancelReason:reason,cancelledBy:who(),cancelledAt:new Date().toISOString()});save();closeModal();render();toast('Voucher cancelled');};
+  const refund=canRefund(v)&&$('#cv-refund')&&$('#cv-refund').checked;const method=refund?$('#cv-method').value:null;const ap1=a.dataset.ap&&a.dataset.ap!==who()?a.dataset.ap:'';
+  const commit=ap2=>{const now=new Date().toISOString();const st=V_LABEL[vStatus(v)];const bal=v.balance;const appr=[ap1,ap2&&ap2.name!==who()?ap2.name:''].filter(Boolean);
+    if(refund){const r={id:uid(),day:todayStr(),at:now,amount:bal,method,code:v.code,voucherId:v.id,saleId:v.saleId||null,saleNo:v.saleNo||null,by:who(),approvedBy:appr.join(', '),reason};
+      state.refunds.push(r);v.refund={amount:bal,method,at:now,by:who()};v.balance=0;}
+    logAct(refund?'Refunded voucher':'Cancelled voucher',`${v.code} (${st}${bal?', balance '+R(bal):''})${refund?`: ${R(bal)} paid back by ${method}`:bal?': balance written off':''}. Reason: ${reason}${appr.length?' (approved by '+appr.join(', ')+')':''}`);
+    Object.assign(v,{status:'cancelled',cancelReason:reason,cancelledBy:who(),cancelledAt:now});save();closeModal();render();
+    toast(refund?`Voucher cancelled. Give the client ${R(bal)} (${method}); it comes off today's cash-up.`:'Voucher cancelled');};
+  if(refund)need('void','give a refund',ap2=>commit(ap2));else commit(null);};
 ACT.printVoucher=a=>{const v=state.vouchers.find(x=>x.id===a.dataset.id);if(v)printVouchers([v]);};
 function printVouchers(list){const st=state.settings;
   $('#print-area').innerHTML=list.map(v=>{const card=vStatus(v)==='unsold';
@@ -1364,11 +1384,25 @@ ACT.csvVouchers=()=>need('vouchers','export vouchers',()=>download(`vouchers-${t
 
 /* ---------- CASH-UP (end of day) ---------- */
 let cuDate=todayStr();
+const localDay=iso=>iso?dateStr(new Date(iso)):'';
+const saleDay=s=>s.day||localDay(s.date);
+/* Money for one day, the way the till sees it:
+   - a sale counts on the day it was rung up, unless it was voided that same day;
+   - money paid back on the day (sales from earlier days voided today, and voucher
+     refunds) comes off that day's figures under the method it was paid back by. */
 function dayFigures(date){
-  const all=state.sales.filter(s=>(s.day||s.date.slice(0,10))===date);const sales=all.filter(s=>!s.voidedAt);
-  const mt=methodTotals(sales);const vsold=sales.reduce((a,s)=>a+s.lines.filter(l=>l.type==='voucher').reduce((b,l)=>b+l.net,0),0);
-  const voids=state.sales.filter(s=>s.voidedAt&&s.voidedAt.slice(0,10)===date);
-  return{all,sales,mt,total:r2(sales.reduce((a,s)=>a+s.total,0)),vsold:r2(vsold),voids,discounts:r2(sales.reduce((a,s)=>a+(+s.discount||0)+s.lines.reduce((b,l)=>b+(+l.disc||0),0),0))};}
+  const all=state.sales.filter(s=>saleDay(s)===date);
+  const sales=all.filter(s=>!(s.voidedAt&&localDay(s.voidedAt)===date));
+  const voidsToday=state.sales.filter(s=>s.voidedAt&&localDay(s.voidedAt)===date);
+  const voids=voidsToday.filter(s=>saleDay(s)===date);
+  const refunds=[];
+  voidsToday.filter(s=>saleDay(s)!==date).forEach(s=>salePayments(s).forEach(p=>refunds.push({method:p.free?'Free voucher':p.method,amount:r2(+p.amount||0),what:`Invoice ${s.no} (${fmtD(saleDay(s))}) voided`})));
+  state.refunds.filter(r=>r.day===date).forEach(r=>refunds.push({method:r.method,amount:r.amount,what:`Voucher ${r.code} refunded`,voucher:true}));
+  const mt=methodTotals(sales);refunds.forEach(r=>{mt[r.method]=r2((mt[r.method]||0)-r.amount);});
+  const gross=r2(sales.reduce((a,s)=>a+s.total,0));const refundTotal=r2(refunds.reduce((a,r)=>a+r.amount,0));
+  const vsold=sales.reduce((a,s)=>a+s.lines.filter(l=>l.type==='voucher').reduce((b,l)=>b+l.net,0),0);
+  const vref=refunds.filter(r=>r.voucher).reduce((a,r)=>a+r.amount,0);
+  return{all,sales,mt,gross,refunds,refundTotal,total:r2(gross-refundTotal),vsold:r2(vsold-vref),voids,discounts:r2(sales.reduce((a,s)=>a+(+s.discount||0)+s.lines.reduce((b,l)=>b+(+l.disc||0),0),0))};}
 function renderCashup(m){
   const f=dayFigures(cuDate);const saved=state.cashups.filter(c=>c.date===cuDate).slice(-1)[0];
   const methods=[...new Set([...PAY_METHODS,'Deposit',...Object.keys(f.mt)])].filter(k=>k!=='Voucher'||f.mt[k]);const notMoney=k=>k==='Voucher'||k==='Free voucher';
@@ -1378,10 +1412,12 @@ function renderCashup(m){
     <div class="cu-grid">
       <div class="table-wrap"><table><thead><tr><th>Takings by method</th><th class="n">System</th></tr></thead><tbody>
         ${methods.map(k=>`<tr><td>${esc(k)}${k==='Deposit'?' <span class="muted">(paid earlier)</span>':''}${notMoney(k)?' <span class="muted">(not money in)</span>':''}</td><td class="n">${R(f.mt[k]||0)}</td></tr>`).join('')}
-        <tr><td><b>Total takings</b></td><td class="n"><b>${R(f.total)}</b></td></tr>
-        ${f.vsold?`<tr><td class="muted">Includes gift vouchers sold</td><td class="n muted">${R(f.vsold)}</td></tr>`:''}
+        ${f.refunds.length?`<tr><td colspan="2" style="padding-bottom:2px"><b>Paid back today</b> <span class="muted">(already taken off the amounts above)</span></td></tr>
+          ${f.refunds.map(r=>`<tr><td class="muted" style="padding-left:24px">${esc(r.what)} · ${esc(r.method)}</td><td class="n muted">−${R(r.amount)}</td></tr>`).join('')}`:''}
+        <tr><td><b>Total takings</b>${f.refundTotal?' <span class="muted">(after refunds)</span>':''}</td><td class="n"><b>${R(f.total)}</b></td></tr>
+        ${f.vsold?`<tr><td class="muted">Includes gift vouchers sold${f.refunds.some(r=>r.voucher)?' (less refunds)':''}</td><td class="n muted">${R(f.vsold)}</td></tr>`:''}
         ${f.discounts?`<tr><td class="muted">Discounts given</td><td class="n muted">${R(f.discounts)}</td></tr>`:''}
-        ${f.voids.length?`<tr><td class="muted">Voided today (${f.voids.length})</td><td class="n muted">${R(f.voids.reduce((a,s)=>a+s.total,0))}</td></tr>`:''}
+        ${f.voids.length?`<tr><td class="muted">Rung up and voided today (${f.voids.length}), not counted</td><td class="n muted">${R(f.voids.reduce((a,s)=>a+s.total,0))}</td></tr>`:''}
       </tbody></table></div>
       <div class="panel">
         <label class="fld">Opening float in the till (R)<input id="cu-float" type="number" min="0" step="0.01" value="${saved?saved.float:''}" placeholder="0"></label>
@@ -1400,18 +1436,19 @@ function cuValues(){const f=dayFigures(cuDate);const fl=parseFloat(($('#cu-float
   const counted=cashEl&&cashEl.value!==''?parseFloat(cashEl.value):null;const card=cardEl&&cardEl.value!==''?parseFloat(cardEl.value):null;
   const expectedCash=r2(fl+(f.mt.Cash||0));return{f,float:r2(fl),counted,card,expectedCash,diff:counted==null?null:r2(counted-expectedCash),cardDiff:card==null?null:r2(card-(f.mt.Card||0))};}
 function cuDiffHTML(){const v=cuValues();const cls=d=>Math.abs(d)<0.005?'diff-ok':'diff-bad';const word=d=>Math.abs(d)<0.005?'Balances':d>0?'Over by '+R(d):'Short by '+R(-d);
-  return `<div class="trow"><span>Cash expected (float + cash sales)</span><span>${R(v.expectedCash)}</span></div>
+  return `<div class="trow"><span>Cash expected (float + cash sales${v.f.refunds.some(r=>r.method==='Cash')?' − cash refunds':''})</span><span>${R(v.expectedCash)}</span></div>
     ${v.diff!=null?`<div class="trow"><span>Cash</span><span class="${cls(v.diff)}">${word(v.diff)}</span></div>`:''}
     ${v.cardDiff!=null?`<div class="trow"><span>Card machine vs system</span><span class="${cls(v.cardDiff)}">${word(v.cardDiff)}</span></div>`:''}`;}
 ACT.saveCashup=()=>{const v=cuValues();if(v.counted==null){toast('Enter the cash counted');return;}
   logAct('Cash-up',`${cuDate}: takings ${R(v.f.total)}, cash ${Math.abs(v.diff)<0.005?'balances':(v.diff>0?'over ':'short ')+R(Math.abs(v.diff))}`);
-  const rec={id:uid(),date:cuDate,at:new Date().toISOString(),by:who(),float:v.float,counted:r2(v.counted),expectedCash:v.expectedCash,diff:v.diff,cardBatch:v.card,cardDiff:v.cardDiff,total:v.f.total,methods:v.f.mt,invoices:v.f.sales.length,notes:$('#cu-notes').value.trim()};
+  const rec={id:uid(),date:cuDate,at:new Date().toISOString(),by:who(),float:v.float,counted:r2(v.counted),expectedCash:v.expectedCash,diff:v.diff,cardBatch:v.card,cardDiff:v.cardDiff,total:v.f.total,methods:v.f.mt,refunds:v.f.refunds,invoices:v.f.sales.length,notes:$('#cu-notes').value.trim()};
   state.cashups=state.cashups.filter(c=>c.date!==cuDate);state.cashups.push(rec);state.cashups.sort((a,b)=>a.date.localeCompare(b.date));
   save();render();toast('Cash-up saved'+(Math.abs(v.diff)<0.005?'':': cash '+(v.diff>0?'over':'short')+' by '+R(Math.abs(v.diff))));};
 ACT.printCashup=()=>{const v=cuValues();const st=state.settings;const row=(a,b)=>`<div class="row"><span>${esc(a)}</span><span>${esc(b)}</span></div>`;
   $('#print-area').innerHTML=`<div class="rcpt"><div class="r-c r-name">${esc(st.name)}</div><div class="r-c">CASH-UP · ${esc(new Date(cuDate+'T00:00').toLocaleDateString('en-ZA'))}</div><div class="r-c">Printed ${new Date().toLocaleString('en-ZA')}</div><div class="r-hr"></div>
     ${row('Invoices',v.f.sales.length)}${Object.entries(v.f.mt).map(([k,a])=>row(k,R(a))).join('')}<div class="row r-total"><span>TOTAL</span><span>${R(v.f.total)}</span></div>
-    ${v.f.vsold?row('Incl. vouchers sold',R(v.f.vsold)):''}${v.f.discounts?row('Discounts given',R(v.f.discounts)):''}${v.f.voids.length?row(`Voids (${v.f.voids.length})`,R(v.f.voids.reduce((a,s)=>a+s.total,0))):''}
+    ${v.f.refunds.length?'<div>Paid back (taken off above):</div>'+v.f.refunds.map(r=>row('  '+r.what+' '+r.method,'-'+R(r.amount))).join(''):''}
+    ${v.f.vsold?row('Incl. vouchers sold',R(v.f.vsold)):''}${v.f.discounts?row('Discounts given',R(v.f.discounts)):''}${v.f.voids.length?row(`Voided same day (${v.f.voids.length})`,R(v.f.voids.reduce((a,s)=>a+s.total,0))):''}
     <div class="r-hr"></div>${row('Float',R(v.float))}${row('Cash expected',R(v.expectedCash))}${v.counted!=null?row('Cash counted',R(v.counted))+row('Difference',R(v.diff)):''}
     ${v.card!=null?row('Card machine',R(v.card))+row('Card difference',R(v.cardDiff)):''}<div class="r-hr"></div><div>Counted by: ____________</div><br><div>Checked by: ____________</div></div>`;
   window.print();};

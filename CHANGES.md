@@ -27,6 +27,7 @@ Changes to `spoilt-brat-pos.html`. The version before these changes is kept as `
 
 ## Cash-up (new tab)
 - The day's takings by payment method, gift vouchers sold, discounts and voids.
+- **Money paid back on the day is taken off.** This covers voucher refunds, and sales from an earlier day that are voided today. The earlier day's figures stay as they were when it was cashed up. A sale rung up and voided on the same day isn't counted at all.
 - Enter the opening float, the cash counted and the card machine total. The tab shows whether cash and card are over or short.
 - **Save cash-up** keeps a history. **Print slip** prints an 80mm Z-slip with signature lines.
 
@@ -78,6 +79,11 @@ Changes to `spoilt-brat-pos.html`. The version before these changes is kept as `
   - **Open** any unsold card in the register to type in or change its **Value** and **Made out to** name. Then **Save**, **Save and print** (the slip shows the amount and the name), or **Sell at the till**, which puts the card on the till ready for payment.
   - At the till, typing a card's code fills in its saved value and name.
 - **Change value or name on a valid voucher.** Open the voucher and choose **Change value or name**. This needs voucher permission or a manager's PIN, plus a reason. The balance moves by the same amount, and the value can't go below what has already been spent. Each change is listed on the voucher and in the activity log. If a client pays to add value, ring the payment up at the till as well, so the money appears in the cash-up.
+- **Refunding a voucher when it is cancelled.** When a sold voucher with money left on it is cancelled, the screen offers **Give the client their R… back** (ticked by default) and asks how the money is paid back (Cash, Card, EFT or Online). It suggests the method the voucher was bought with.
+  - The refund comes off the cash-up for the day it is paid back. A voucher sold and refunded on the same day nets to zero, and the cash expected in the till goes down by the refund.
+  - Refunds need the "Void or refund sales" permission, or a manager's PIN.
+  - The voucher shows "Refunded R… by Cash" and can't be used again. Its sale can't also be voided, which would pay the client back twice.
+  - Untick the box to cancel without paying back, for example for a lost card. The balance is then written off.
 - **Print slips** (80mm) for vouchers and pre-printed cards. Vouchers can be cancelled with a reason, for example when a card is lost.
 - **Expiry:** 36 months by default, which is the Consumer Protection Act minimum. It can be changed in Settings.
 
