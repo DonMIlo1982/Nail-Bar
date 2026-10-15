@@ -221,6 +221,18 @@ td.wrap{white-space:normal;min-width:160px}
 .status-note{background:var(--soft);border-radius:8px;padding:8px 12px;font-size:14px;margin-bottom:12px}
 .notice{margin:0 20px 10px;padding:10px 14px;border-radius:10px;background:var(--soft);font-size:14px}
 .cx-list{margin:0 20px 20px}
+.off-strip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 20px 10px;font-size:13px}
+.off-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:2px 4px 2px 10px;background:var(--surface)}
+/* Roster */
+.rgrid td,.rgrid th{text-align:center;padding:6px}
+.rgrid td:first-child,.rgrid th:first-child{text-align:left}
+.rcell{width:100%;min-height:44px;padding:4px 6px;font-size:12px;line-height:1.25;border-radius:8px}
+.rcell.on{background:color-mix(in srgb,var(--ok) 14%,var(--surface));border-color:color-mix(in srgb,var(--ok) 45%,transparent);color:var(--ink)}
+.rcell.off{background:var(--paper);color:var(--muted)}
+.rcell.leave{background:color-mix(in srgb,var(--warn) 12%,var(--surface));border-color:color-mix(in srgb,var(--warn) 40%,transparent);color:var(--warn)}
+.rcell.changed{box-shadow:inset 0 0 0 2px var(--lacquer)}
+.rgrid th.today{color:var(--lacquer)}
+.wk td{text-align:center}.wk td:first-child{text-align:left}.wk input{width:auto;min-height:0}
 .cx-list .trow{border-bottom:1px solid var(--line);padding:8px 0}
 .badge.void{background:var(--warn);color:#fff}
 tr.voided td{color:var(--muted);text-decoration:line-through}
@@ -290,6 +302,7 @@ tr.voided td.acts,tr.voided td.st{text-decoration:none}
   <nav>
     <button data-act="tab" data-tab="till" class="on">Till</button>
     <button data-act="tab" data-tab="diary">Diary</button>
+    <button data-act="tab" data-tab="roster">Roster</button>
     <button data-act="tab" data-tab="clients">Clients</button>
     <button data-act="tab" data-tab="stock">Stock &amp; services</button>
     <button data-act="tab" data-tab="vouchers">Vouchers</button>
@@ -345,7 +358,7 @@ function defaults(){return{
     {id:uid(),type:'service',name:'False nails',category:'Hands',cost:0,price:1200,duration:90},
     {id:uid(),type:'product',name:'Cuticle oil (sample)',category:'Retail',code:'',cost:60,price:150,qty:12,low:3}
   ],
-  clients:[],sales:[],bookings:[],vouchers:[],cashups:[],users:[],log:[],refunds:[],roster:{},nextInv:1001,cart:emptyCart()};}
+  clients:[],sales:[],bookings:[],vouchers:[],cashups:[],users:[],log:[],refunds:[],plan:{weekly:{},leave:[],days:{}},nextInv:1001,cart:emptyCart()};}
 /* bring data from older versions (or backups) up to the current shape */
 function migrate(s){
   const d=defaults();
@@ -357,7 +370,14 @@ function migrate(s){
   /* the old single owner PIN becomes an Owner login */
   if(s.settings.pin){if(!s.users.length)s.users.push({id:'u'+uid(),name:'Owner',pin:s.settings.pin,role:'owner',perms:[],active:true});delete s.settings.pin;}
   if(!s.settings.logoutMin)s.settings.logoutMin=15;
-  if(!s.roster||typeof s.roster!=='object')s.roster={};
+  /* roster: usual working days per technician, leave, and changes for single days.
+     The old diary "Who's working" lists become single-day changes. */
+  if(!s.plan||typeof s.plan!=='object')s.plan={weekly:{},leave:[],days:{}};
+  ['weekly','days'].forEach(k=>{if(!s.plan[k]||typeof s.plan[k]!=='object')s.plan[k]={};});if(!Array.isArray(s.plan.leave))s.plan.leave=[];
+  if(s.roster&&typeof s.roster==='object'){Object.entries(s.roster).forEach(([d,off])=>{(off||[]).forEach(id=>{(s.plan.days[d]=s.plan.days[d]||{})[id]='off';});});}
+  delete s.roster;
+  if(s.settings.rosterInDiary==null)s.settings.rosterInDiary=true;
+  if(!s.settings.rosterPermAdded){s.users.forEach(u=>{if(u.role==='manager'&&!(u.perms||[]).includes('roster'))u.perms=[...(u.perms||[]),'roster'];});s.settings.rosterPermAdded=true;}
   if(!s.nextInv)s.nextInv=1001;
   s.techs.forEach(t=>{if(t.commSvc==null)t.commSvc=0;if(t.commProd==null)t.commProd=0;});
   s.vouchers.forEach(v=>{if(!v.kind)v.kind='sold';if(!v.status)v.status=v.voidedAt?'cancelled':'active';if(!v.uses)v.uses=[];
@@ -392,7 +412,27 @@ const techById=id=>state.techs.find(t=>t.id===id);
 const techName=id=>(techById(id)||{}).name||'Removed technician';
 const saleById=id=>state.sales.find(s=>s.id===id);
 const bookingById=id=>state.bookings.find(b=>b.id===id);
-const offTechs=d=>state.roster[d]||[];
+/* ----- roster: who works on a date -----
+   Order of rules: a change made for that single day wins; then leave; then the salon
+   being closed; then the technician's usual working days. */
+const LEAVE_TYPES=['Annual leave','Sick leave','Family responsibility','Study or training','Unpaid leave','Other time away'];
+const leaveOn=(id,date)=>state.plan.leave.find(l=>l.techId===id&&l.from<=date&&l.to>=date);
+const dayChange=(id,date)=>(state.plan.days[date]||{})[id];
+function planStatus(id,date){
+  const o=dayChange(id,date);
+  if(o==='on')return{on:true,why:'Added for this day',changed:true};
+  if(o==='off')return{on:false,why:'Off this day',changed:true};
+  const l=leaveOn(id,date);if(l)return{on:false,why:l.type,leave:l};
+  const dow=new Date(date+'T00:00').getDay();
+  if(state.settings.hours[dow].closed)return{on:false,why:'Salon closed'};
+  const w=state.plan.weekly[id];if(w&&w[dow]===false)return{on:false,why:'Day off'};
+  return{on:true,why:'Working'};}
+/* what the diary and till use: the full roster, or only single-day changes if the roster is switched off */
+function workStatus(id,date){if(state.settings.rosterInDiary)return planStatus(id,date);
+  const o=dayChange(id,date);return o==='off'?{on:false,why:'Off this day',changed:true}:{on:true,why:o==='on'?'Added for this day':'Working',changed:o==='on'};}
+const offTechs=d=>state.techs.filter(t=>!workStatus(t.id,d).on).map(t=>t.id);
+/* set or clear a single-day change for a technician */
+function setDayChange(id,date,val){const d=state.plan.days[date]||(state.plan.days[date]={});if(val)d[id]=val;else delete d[id];if(!Object.keys(d).length)delete state.plan.days[date];}
 const clientById=id=>state.clients.find(c=>c.id===id);
 const findClient=name=>{const n=String(name||'').trim().toLowerCase();return n?state.clients.find(c=>c.name.trim().toLowerCase()===n):null;};
 /* cellphone in a comparable form: 0821234567 (accepts +27 / 27 / spaces) */
@@ -466,7 +506,7 @@ function render(){
   if(TAB_PERM[tab]&&!can(TAB_PERM[tab]))tab='till';
   $$('nav button').forEach(b=>{b.hidden=!!TAB_PERM[b.dataset.tab]&&!can(TAB_PERM[b.dataset.tab]);b.classList.toggle('on',b.dataset.tab===tab);});
   $('#today').textContent=fmtDate(todayStr());renderUserBtn();updateNag();
-  ({till:renderTill,diary:renderDiary,clients:renderClients,stock:renderStock,vouchers:renderVouchers,cashup:renderCashup,reports:renderReports,settings:renderSettings})[tab]($('#main'));}
+  ({till:renderTill,diary:renderDiary,roster:renderRoster,clients:renderClients,stock:renderStock,vouchers:renderVouchers,cashup:renderCashup,reports:renderReports,settings:renderSettings})[tab]($('#main'));}
 
 /* ---------- staff logins & permissions ----------
    Each person has their own PIN. The PIN picks out who is logged in, so PINs must be
@@ -479,12 +519,13 @@ const PERMS=[
   ['clients','Open the client list'],
   ['clientExport','Export the client list'],
   ['cashup','Do the cash-up'],
+  ['roster','Roster: days off, leave and who works each day'],
   ['stock','Stock and services: cost prices, deliveries, adding and editing'],
   ['vouchers','Issue free vouchers, create voucher cards, cancel vouchers'],
   ['reports','Reports, turnover and the activity log'],
   ['settings','Settings and staff logins']];
 const ROLE_PERMS={owner:PERMS.map(p=>p[0]),
-  manager:['discount','void','cancelBooking','clients','clientExport','cashup','stock','vouchers','reports'],
+  manager:['discount','void','cancelBooking','clients','clientExport','cashup','roster','stock','vouchers','reports'],
   cashier:['cancelBooking','clients','cashup']};
 const ROLE_LABEL={owner:'Owner',manager:'Manager',cashier:'Cashier'};
 let currentUser=null,lastActivity=Date.now(),pendingNeed=null;
@@ -881,6 +922,8 @@ function renderDiary(m){
     <button class="primary" data-act="newBooking">New booking</button>
   </div>
   ${hrs.closed?`<div class="notice">The salon is normally closed on ${DAYS[new Date(diaryDate+'T00:00').getDay()]}s. You can still add bookings. Change opening hours under Settings.</div>`:''}
+  ${off.length?`<div class="off-strip"><span class="muted">Not working${state.settings.rosterInDiary?'':' (changed for this day)'}:</span>${off.map(id=>{const t=techById(id);const s=workStatus(id,diaryDate);
+    return `<span class="off-chip" style="--tc:${t.color}"><span class="dot"></span>${esc(t.name)} <span class="muted">· ${esc(s.why)}</span><button class="ed" data-act="addForDay" data-tech="${id}" data-date="${diaryDate}">Add to ${diaryDate===todayStr()?'today':'this day'}</button></span>`;}).join('')}</div>`:''}
   ${techs.length?`<div class="diary-wrap"><div class="diary" style="grid-template-columns:56px repeat(${techs.length},minmax(150px,1fr))">
     <div class="dh"></div>${techs.map(t=>`<div class="dh" style="--tc:${t.color}"><span class="dot"></span>${esc(t.name)}</div>`).join('')}
     <div class="times" style="height:${H}px">${hours}</div>
@@ -945,7 +988,8 @@ ACT.saveBooking=()=>{
   if(clash){toast(`${techName(v.techId)} already has ${clash.client} at ${clash.start}`);return;}
   /* warn (don't block) for days off and outside opening hours */
   const warn=[];const h=hoursFor(v.date);
-  if(offTechs(v.date).includes(v.techId))warn.push(`${techName(v.techId)} is marked as off on ${fmtDate(v.date)}. Saving will mark them as working that day.`);
+  const ws=workStatus(v.techId,v.date);
+  if(!ws.on)warn.push(`${techName(v.techId)} is not on the roster on ${fmtDate(v.date)} (${ws.why}). Saving will add them as working that day.`);
   if(h.closed)warn.push(`The salon is normally closed on ${DAYS[new Date(v.date+'T00:00').getDay()]}s.`);
   else if(s<toMin(h.open)||e>toMin(h.close))warn.push(`This is outside opening hours (${h.open}–${h.close}).`);
   if(linked&&findClient(v.client)!==linked){warn.push(`This cellphone number belongs to ${linked.name}. The booking will be saved under their name.`);v.client=linked.name;}
@@ -954,7 +998,7 @@ ACT.saveBooking=()=>{
     if(id){const old=bookingById(id);const moved=old.date!==v.date||old.start!==v.start||old.techId!==v.techId;Object.assign(old,v,{updatedBy:who(),updatedAt:new Date().toISOString()});
       logAct(moved?'Moved booking':'Edited booking',desc);}
     else{state.bookings.push({id:uid(),status:'booked',created:new Date().toISOString(),createdBy:who(),...v});logAct('New booking',desc);}
-    if(offTechs(v.date).includes(v.techId))state.roster[v.date]=offTechs(v.date).filter(x=>x!==v.techId);
+    if(!workStatus(v.techId,v.date).on){setDayChange(v.techId,v.date,'on');logAct('Roster change',`${techName(v.techId)} added as working on ${v.date} for a booking`);}
     save();closeModal();diaryDate=v.date;render();toast('Booking saved');};
   if(!warn.length)return commit();
   confirmModal('Check before saving',warn.join('\n\n'),'Save booking',commit,{noLabel:'Go back',onNo:()=>bookingForm({...(id?bookingById(id):{status:'booked'}),...v,id})});
@@ -983,12 +1027,22 @@ ACT.bookingToTill=()=>{
   if(!busy)loadSlipClient();c.activeTech=b.techId;b.status='arrived';
   save();closeModal();setTab('till');toast(busy?`${b.client}'s bill (${techName(b.techId)}) is waiting on the till. Tap it to bill it.`:`${b.client} added to the till under ${techName(b.techId)}`);
 };
-ACT.roster=()=>{const off=offTechs(diaryDate);
-  openModal(`<h2>Who's working</h2><p class="muted" style="margin-top:-6px">${fmtDate(diaryDate)}</p><div class="check-list">${state.techs.map(t=>`<label class="chk"><input type="checkbox" value="${t.id}" ${off.includes(t.id)?'':'checked'}><span class="dot" style="--tc:${t.color}"></span>${esc(t.name)}</label>`).join('')}</div>
-  <div class="btns"><button class="primary" data-act="saveRoster">Save</button><button class="ghost" data-act="closeModal">Cancel</button></div>`);};
-ACT.saveRoster=()=>{const off=$$('.check-list input').filter(i=>!i.checked).map(i=>i.value);
-  const n=state.bookings.filter(b=>b.date===diaryDate&&ACTIVE(b)&&off.includes(b.techId)).length;
-  state.roster[diaryDate]=off;save();closeModal();render();if(n)toast(`${n} booking${n===1?' belongs':'s belong'} to someone now marked as off`);};
+/* "Who's working" in the diary: tick or untick for this day only; the roster stays as it is */
+ACT.roster=()=>need('roster','change who is working',()=>{const d=diaryDate;
+  openModal(`<h2>Who's working</h2><p class="muted" style="margin-top:-6px">${fmtDate(d)} · changes apply to this day only</p><div class="check-list">${state.techs.map(t=>{const s=workStatus(t.id,d);
+    return `<label class="chk"><input type="checkbox" value="${t.id}" ${s.on?'checked':''}><span class="dot" style="--tc:${t.color}"></span><span style="flex:1">${esc(t.name)}${s.why!=='Working'?`<br><span class="muted" style="font-size:12px">${esc(s.why)}</span>`:''}</span></label>`;}).join('')}</div>
+  <div class="btns"><button class="primary" data-act="saveRoster">Save</button><button class="ghost" data-act="closeModal">Cancel</button></div>`);});
+ACT.saveRoster=()=>{const d=diaryDate;const on=$$('.check-list input').filter(i=>i.checked).map(i=>i.value);const changes=[];
+  state.techs.forEach(t=>{const want=on.includes(t.id);if(want===workStatus(t.id,d).on)return;
+    /* go back to the roster if that gives the wanted answer, otherwise record a change for this day */
+    setDayChange(t.id,d,null);if(workStatus(t.id,d).on!==want)setDayChange(t.id,d,want?'on':'off');changes.push(`${t.name} ${want?'working':'off'}`);});
+  if(changes.length)logAct('Roster change',`${d}: ${changes.join(', ')}`);
+  const n=state.bookings.filter(b=>b.date===d&&ACTIVE(b)&&!on.includes(b.techId)).length;
+  save();closeModal();render();if(n)toast(`${n} booking${n===1?' belongs':'s belong'} to someone now marked as off`);};
+/* add a technician who is off (day off or leave) as working for one day */
+ACT.addForDay=a=>need('roster','add a technician to the day',()=>{const id=a.dataset.tech,d=a.dataset.date||diaryDate;const s=planStatus(id,d);
+  const go=()=>{setDayChange(id,d,null);if(!workStatus(id,d).on)setDayChange(id,d,'on');logAct('Roster change',`${techName(id)} added as working on ${d} (was: ${s.why})`);save();closeModal();render();toast(`${techName(id)} is working on ${fmtD(d)}`);};
+  if(s.leave)confirmModal(`${techName(id)} is on ${s.leave.type.toLowerCase()}`,`Leave from ${fmtD(s.leave.from)} to ${fmtD(s.leave.to)}. Add them as working on ${fmtDate(d)} anyway? The rest of the leave stays as it is.`,'Add for this day',go);else go();});
 /* ----- appointment reminders (service messages, so no marketing opt-in needed) ----- */
 const reminderMsg=b=>{const d=new Date(b.date+'T00:00').toLocaleDateString('en-ZA',{weekday:'long',day:'numeric',month:'long'});
   return `Hi ${b.client.split(' ')[0]}, this is a reminder of your ${bookingLabel(b)} appointment with ${techName(b.techId)} at ${state.settings.name} on ${d} at ${b.start}. Please reply if you need to change it. See you then!`;};
@@ -1232,6 +1286,95 @@ ACT.csvTech=()=>download(`technician-turnover-${repMonth}.csv`,[['Technician','C
 ACT.csvStock=()=>download(`stock-${todayStr()}.csv`,[['Product','Category','Code','In stock','Reorder at','Cost price','Retail price','Value at cost','Value at retail'],...state.items.filter(i=>i.type==='product').map(i=>[i.name,i.category,i.code,i.qty,i.low,i.cost,i.price,(i.qty*i.cost).toFixed(2),(i.qty*i.price).toFixed(2)])].map(r=>r.map(csvCell).join(',')).join('\n'));
 ACT.csvSales=()=>{const rows=[['Invoice','Date','Client','Technician','Item','Type','Qty','Price each','Line discount','Line after all discounts','Paid by','Voided','Void reason']];monthAll().forEach(s=>s.lines.forEach(l=>rows.push([s.no,new Date(s.date).toLocaleString('en-ZA'),s.client,l.techName,l.name+(l.code?' '+l.code:''),l.type,l.qty,l.price,+l.disc||0,l.net,salePayments(s).map(p=>p.method+' '+(+p.amount).toFixed(2)).join(' + '),s.voidedAt?'Yes':'',s.voidReason||''])));download(`sales-${repMonth}.csv`,rows.map(r=>r.map(csvCell).join(',')).join('\n'));};
 
+/* ---------- ROSTER (usual days, leave, single-day changes) ---------- */
+const mondayOf=d=>{const x=new Date(d+'T00:00');x.setDate(x.getDate()-((x.getDay()+6)%7));return dateStr(x);};
+const addDays=(d,n)=>{const x=new Date(d+'T00:00');x.setDate(x.getDate()+n);return dateStr(x);};
+const daysBetween=(a,b)=>Math.round((new Date(b+'T00:00')-new Date(a+'T00:00'))/864e5);
+const WEEK_ORDER=[1,2,3,4,5,6,0];   /* Monday first */
+let rWeek=mondayOf(todayStr()),rShowPast=false;
+function renderRoster(m){
+  const days=[...Array(7)].map((_,i)=>addDays(rWeek,i));const edit=can('roster');const today=todayStr();
+  const leave=state.plan.leave.filter(l=>rShowPast||l.to>=today).sort((a,b)=>a.from.localeCompare(b.from));
+  m.innerHTML=`<div class="page">
+    <div class="page-head"><h1>Roster</h1><div class="btns" style="margin:0;align-items:center">
+      <button data-act="rWeek" data-n="-7" aria-label="Previous week">‹</button><input type="date" id="r-date" value="${rWeek}" aria-label="Week of" style="width:auto"><button data-act="rWeek" data-n="7" aria-label="Next week">›</button><button data-act="rWeek" data-n="0">This week</button>
+      ${edit?'<button class="primary" data-act="addLeave">Add leave or time away</button>':''}</div></div>
+    <label class="vat-row" style="margin:0 0 12px">${edit?`<input type="checkbox" id="rs-diary" ${state.settings.rosterInDiary?'checked':''}>`:''}<span><b>${state.settings.rosterInDiary?'The diary follows this roster.':'The diary is not following this roster.'}</b> <span class="muted">${state.settings.rosterInDiary?'Each day in the diary only shows the technicians working that day.':'Tick to bring the roster into the diary, so each day only shows the technicians working.'}</span></span></label>
+    <div class="table-wrap"><table class="rgrid"><thead><tr><th>Week of ${fmtD(rWeek)}</th>${days.map(d=>`<th class="${d===today?'today':''}">${new Date(d+'T00:00').toLocaleDateString('en-ZA',{weekday:'short'})}<br><span style="font-weight:400">${new Date(d+'T00:00').toLocaleDateString('en-ZA',{day:'numeric',month:'short'})}</span></th>`).join('')}</tr></thead><tbody>
+      ${state.techs.map(t=>`<tr><td><span class="dot" style="--tc:${t.color};margin-right:6px;vertical-align:-1px"></span>${esc(t.name)}</td>${days.map(d=>{const s=planStatus(t.id,d);const n=state.bookings.filter(b=>b.date===d&&b.techId===t.id&&ACTIVE(b)).length;
+        const cls=s.on?'on':s.leave?'leave':'off';
+        return `<td><button class="rcell ${cls} ${s.changed?'changed':''}" data-act="rCell" data-tech="${t.id}" data-date="${d}" title="${esc(s.why)}${n?` · ${n} booking${n===1?'':'s'}`:''}">${s.on?'Working':esc(s.why)}${n?`<br><span class="muted" style="font-size:11px">${n} booking${n===1?'':'s'}</span>`:''}</button></td>`;}).join('')}</tr>`).join('')}
+      <tr><td class="muted">Working</td>${days.map(d=>`<td class="muted">${state.techs.filter(t=>planStatus(t.id,d).on).length} of ${state.techs.length}</td>`).join('')}</tr>
+    </tbody></table></div>
+    <p class="muted" style="font-size:13px;margin:6px 0 0">${edit?'Tap a day to change it for that day only, for example to bring in a technician who is normally off. ':''}Days with a pink outline were changed for that day.</p>
+    <div class="page-head"><h2>Leave and time away</h2><label class="vat-row" style="margin:0;grid-column:auto"><input type="checkbox" id="r-past" ${rShowPast?'checked':''}>Show past leave</label></div>
+    <div class="table-wrap"><table><thead><tr><th>Technician</th><th>Type</th><th>From</th><th>To</th><th class="n">Days</th><th>Note</th><th>Added by</th><th></th></tr></thead><tbody>
+      ${leave.map(l=>`<tr><td>${esc(techName(l.techId))}</td><td>${esc(l.type)}</td><td>${fmtD(l.from)}</td><td>${fmtD(l.to)}</td><td class="n">${daysBetween(l.from,l.to)+1}</td><td class="wrap">${esc(l.note||'')}</td><td>${esc(l.by||'')}</td><td class="acts">${edit?`<button data-act="editLeave" data-id="${l.id}">Edit</button><button class="danger" data-act="delLeave" data-id="${l.id}">Delete</button>`:''}</td></tr>`).join('')||`<tr><td colspan="8" class="muted">${rShowPast?'No leave recorded.':'No leave coming up.'}</td></tr>`}
+    </tbody></table></div>
+    <div class="page-head"><h2>Usual working days</h2>${edit?'<button data-act="saveWeekly">Save usual days</button>':''}</div>
+    <div class="table-wrap"><table class="wk"><thead><tr><th>Technician</th>${WEEK_ORDER.map(i=>`<th style="text-align:center">${DAYS[i].slice(0,3)}${state.settings.hours[i].closed?'<br><span class="muted" style="font-weight:400;font-size:11px">closed</span>':''}</th>`).join('')}</tr></thead><tbody>
+      ${state.techs.map(t=>{const w=state.plan.weekly[t.id]||[];return `<tr><td>${esc(t.name)}</td>${WEEK_ORDER.map(i=>`<td><input type="checkbox" data-wk="${t.id}" data-dow="${i}" ${w[i]===false?'':'checked'} ${edit?'':'disabled'} aria-label="${esc(t.name)} works ${DAYS[i]}"></td>`).join('')}</tr>`;}).join('')}
+    </tbody></table></div>
+    <p class="muted" style="font-size:13px;margin:6px 0 0">Untick a technician's regular days off. Days the salon is closed (Settings → Opening hours) are off for everyone.</p>
+  </div>`;
+}
+ACT.rWeek=a=>{const n=+a.dataset.n;rWeek=n?addDays(rWeek,n):mondayOf(todayStr());render();};
+/* one technician on one day */
+ACT.rCell=a=>need('roster','change the roster',()=>openRCell(a.dataset.tech,a.dataset.date));
+function openRCell(id,d){const s=planStatus(id,d);const t=techById(id);
+  const bks=state.bookings.filter(b=>b.date===d&&b.techId===id&&ACTIVE(b));
+  setDayChange(id,d,null);const base=planStatus(id,d);if(s.changed)setDayChange(id,d,s.on?'on':'off');
+  openModal(`<h2>${esc(t.name)} · ${esc(fmtDate(d))}</h2>
+  <div class="status-note">${s.on?'Working':'Not working'}${s.why!=='Working'?' · '+esc(s.why):''}${s.leave?` (${fmtD(s.leave.from)} to ${fmtD(s.leave.to)})`:''}${s.changed?`<br><span class="muted">Usual roster for this day: ${base.on?'working':esc(base.why.toLowerCase())}</span>`:''}</div>
+  ${bks.length?`<p style="font-size:14px">${bks.length} booking${bks.length===1?'':'s'}: ${bks.map(b=>`${b.start} ${esc(b.client)}`).join(', ')}</p>`:''}
+  <div class="btns">${s.on?'':`<button class="primary" data-act="rSet" data-tech="${id}" data-date="${d}" data-v="on">Working this day</button>`}
+    ${s.on?`<button data-act="rSet" data-tech="${id}" data-date="${d}" data-v="off">Off this day</button>`:''}
+    ${s.changed?`<button data-act="rSet" data-tech="${id}" data-date="${d}" data-v="">Back to usual roster</button>`:''}
+    ${s.leave?'':`<button data-act="addLeave" data-tech="${id}" data-date="${d}">Add leave from this day</button>`}
+    <button class="ghost" data-act="closeModal">Close</button></div>`);}
+ACT.rSet=a=>{const id=a.dataset.tech,d=a.dataset.date,v=a.dataset.v;const before=planStatus(id,d);
+  const go=()=>{setDayChange(id,d,null);if(v&&planStatus(id,d).on!==(v==='on'))setDayChange(id,d,v);const after=planStatus(id,d);
+    logAct('Roster change',`${techName(id)} on ${d}: ${before.on?'working':before.why} → ${after.on?'working':after.why}`);save();closeModal();render();};
+  const bks=state.bookings.filter(b=>b.date===d&&b.techId===id&&ACTIVE(b));
+  if(v==='off'&&bks.length)confirmModal(`${techName(id)} has ${bks.length} booking${bks.length===1?'':'s'} that day`,bks.map(b=>`${b.start} ${b.client}: ${bookingLabel(b)}`).join('\n')+'\n\nMark them as off anyway? Move or cancel the bookings in the diary.','Mark as off',go,{noLabel:'Go back',onNo:()=>openRCell(id,d)});
+  else go();};
+/* leave and time away (whole days) */
+let editingLeave=null;
+ACT.addLeave=a=>need('roster','add leave',()=>leaveForm({techId:a.dataset.tech||'',from:a.dataset.date||todayStr(),to:a.dataset.date||todayStr(),type:LEAVE_TYPES[0]}));
+ACT.editLeave=a=>need('roster','change leave',()=>{const l=state.plan.leave.find(x=>x.id===a.dataset.id);if(l)leaveForm(l);});
+function leaveForm(l){editingLeave=l.id||null;
+  openModal(`<h2>${l.id?'Change leave':'Leave or time away'}</h2><div class="form-grid">
+    <label class="fld">Technician<select id="lv-tech">${state.techs.map(t=>`<option value="${t.id}" ${t.id===l.techId?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label>
+    <label class="fld">Type<select id="lv-type">${LEAVE_TYPES.map(x=>`<option ${x===l.type?'selected':''}>${x}</option>`).join('')}</select></label>
+    <label class="fld">First day off<input id="lv-from" type="date" value="${l.from}"></label>
+    <label class="fld">Last day off<input id="lv-to" type="date" value="${l.to}"></label>
+    <label class="fld span2">Note<input id="lv-note" value="${esc(l.note||'')}" autocomplete="off" placeholder="Optional, e.g. back at 13:00 on the last day"></label>
+  </div><p class="muted" style="font-size:13px;margin-top:-4px">Leave is in whole days. For part of a day, add leave for that day and use “Working this day” on the roster if they come in.</p>
+  <div class="btns"><button class="primary" data-act="saveLeave">Save</button><button class="ghost" data-act="closeModal">Cancel</button></div>`);}
+ACT.saveLeave=()=>{const v={techId:$('#lv-tech').value,type:$('#lv-type').value,from:$('#lv-from').value,to:$('#lv-to').value,note:$('#lv-note').value.trim()};
+  if(!v.from||!v.to){toast('Choose the first and last day');return;}if(v.to<v.from){toast('The last day is before the first day');return;}
+  const clash=state.plan.leave.find(l=>l.id!==editingLeave&&l.techId===v.techId&&l.from<=v.to&&l.to>=v.from);
+  if(clash){toast(`${techName(v.techId)} already has ${clash.type.toLowerCase()} from ${fmtD(clash.from)} to ${fmtD(clash.to)}`);return;}
+  const id=editingLeave;
+  const commit=()=>{const desc=`${techName(v.techId)}: ${v.type}, ${v.from} to ${v.to}${v.note?' ('+v.note+')':''}`;
+    if(id){Object.assign(state.plan.leave.find(l=>l.id===id),v,{changedBy:who()});logAct('Changed leave',desc);}
+    else{state.plan.leave.push({id:uid(),...v,by:who(),at:new Date().toISOString()});logAct('Added leave',desc);}
+    /* single-day "off" changes inside the leave are no longer needed */
+    for(let d=v.from;d<=v.to;d=addDays(d,1))if(dayChange(v.techId,d)==='off')setDayChange(v.techId,d,null);
+    save();closeModal();render();toast('Leave saved');};
+  const bks=state.bookings.filter(b=>b.techId===v.techId&&ACTIVE(b)&&b.status==='booked'&&b.date>=v.from&&b.date<=v.to&&dayChange(v.techId,b.date)!=='on');
+  if(bks.length)return confirmModal(`${techName(v.techId)} has ${bks.length} booking${bks.length===1?'':'s'} during this leave`,bks.map(b=>`${fmtD(b.date)} ${b.start} ${b.client}: ${bookingLabel(b)}`).join('\n')+'\n\nSave the leave anyway? Move these bookings to another technician in the diary.','Save leave',commit,{noLabel:'Go back',onNo:()=>leaveForm({...v,id})});
+  commit();};
+ACT.delLeave=a=>need('roster','delete leave',()=>{const l=state.plan.leave.find(x=>x.id===a.dataset.id);if(!l)return;
+  confirmModal('Delete this leave?',`${techName(l.techId)}: ${l.type}, ${fmtD(l.from)} to ${fmtD(l.to)}. They go back to their usual working days.`,'Delete leave',()=>{
+    state.plan.leave=state.plan.leave.filter(x=>x!==l);logAct('Deleted leave',`${techName(l.techId)}: ${l.type}, ${l.from} to ${l.to}`);save();render();});});
+ACT.saveWeekly=()=>need('roster','change usual working days',()=>{const changes=[];
+  state.techs.forEach(t=>{const w=[...Array(7)].map((_,i)=>{const c=$(`[data-wk="${t.id}"][data-dow="${i}"]`);return c?c.checked:true;});
+    const old=state.plan.weekly[t.id]||[true,true,true,true,true,true,true];
+    if(w.some((x,i)=>x!==(old[i]!==false))){changes.push(`${t.name}: off ${WEEK_ORDER.filter(i=>!w[i]).map(i=>DAYS[i].slice(0,3)).join(', ')||'none'}`);}
+    if(w.every(Boolean))delete state.plan.weekly[t.id];else state.plan.weekly[t.id]=w;});
+  if(changes.length)logAct('Changed usual working days',changes.join('; '));save();render();toast(changes.length?'Usual working days saved':'No changes');});
+
 /* ---------- VOUCHERS (register, check, issue, pre-printed cards) ---------- */
 let vcCode='',vrFilter='active',vrSearch='';
 function renderVouchers(m){
@@ -1403,8 +1546,16 @@ function dayFigures(date){
   const vsold=sales.reduce((a,s)=>a+s.lines.filter(l=>l.type==='voucher').reduce((b,l)=>b+l.net,0),0);
   const vref=refunds.filter(r=>r.voucher).reduce((a,r)=>a+r.amount,0);
   return{all,sales,mt,gross,refunds,refundTotal,total:r2(gross-refundTotal),vsold:r2(vsold-vref),voids,discounts:r2(sales.reduce((a,s)=>a+(+s.discount||0)+s.lines.reduce((b,l)=>b+(+l.disc||0),0),0))};}
+/* cash left in the till at the end of a cash-up becomes the next day's opening float */
+const closingOf=c=>c.closing!=null?c.closing:c.counted;
+const prevCashup=date=>state.cashups.filter(c=>c.date<date).slice(-1)[0];
 function renderCashup(m){
   const f=dayFigures(cuDate);const saved=state.cashups.filter(c=>c.date===cuDate).slice(-1)[0];
+  const prev=prevCashup(cuDate);const carried=prev?closingOf(prev):null;
+  const prevDay=prev?new Date(prev.date+'T00:00').toLocaleDateString('en-ZA',{weekday:'long',day:'numeric',month:'short'}):'';
+  const floatVal=saved?saved.float:carried!=null?carried:'';
+  const floatNote=!prev?'':saved?(Math.abs(saved.float-carried)>0.004?`<span style="color:var(--warn)">The cash-up on ${prevDay} left ${R(carried)} in the till, but this day started with ${R(saved.float)}.</span>`:`Brought forward from ${prevDay}.`)
+    :`Brought forward: ${R(carried)} was left in the till at the cash-up on ${prevDay}.`;
   const methods=[...new Set([...PAY_METHODS,'Deposit',...Object.keys(f.mt)])].filter(k=>k!=='Voucher'||f.mt[k]);const notMoney=k=>k==='Voucher'||k==='Free voucher';
   m.innerHTML=`<div class="page">
     <div class="page-head"><h1>Cash-up</h1><label class="fld inline">Day<input id="cu-date" type="date" value="${cuDate}"></label></div>
@@ -1420,28 +1571,32 @@ function renderCashup(m){
         ${f.voids.length?`<tr><td class="muted">Rung up and voided today (${f.voids.length}), not counted</td><td class="n muted">${R(f.voids.reduce((a,s)=>a+s.total,0))}</td></tr>`:''}
       </tbody></table></div>
       <div class="panel">
-        <label class="fld">Opening float in the till (R)<input id="cu-float" type="number" min="0" step="0.01" value="${saved?saved.float:''}" placeholder="0"></label>
+        <label class="fld">Opening float in the till (R)<input id="cu-float" type="number" min="0" step="0.01" value="${floatVal}" placeholder="0">${floatNote?`<span style="font-size:12px">${floatNote}</span>`:''}</label>
         <label class="fld">Cash counted in the till now (R)<input id="cu-cash" type="number" min="0" step="0.01" value="${saved?saved.counted:''}"></label>
+        <label class="fld">Cash taken out of the till (banked or put in the safe) (R)<input id="cu-out" type="number" min="0" step="0.01" value="${saved&&saved.out?saved.out:''}" placeholder="0"></label>
         <label class="fld">Card machine end-of-day total (R)<input id="cu-card" type="number" min="0" step="0.01" value="${saved&&saved.cardBatch!=null?saved.cardBatch:''}" placeholder="Optional"></label>
         <label class="fld">Notes<input id="cu-notes" value="${esc(saved?saved.notes:'')}" autocomplete="off"></label>
         <div id="cu-diff">${cuDiffHTML()}</div>
         <div class="btns"><button class="primary" data-act="saveCashup">Save cash-up</button><button data-act="printCashup">Print slip</button></div>
       </div>
     </div>
-    ${state.cashups.length?`<div class="page-head"><h2>Recent cash-ups</h2></div><div class="table-wrap"><table><thead><tr><th>Day</th><th class="n">Takings</th><th class="n">Cash expected</th><th class="n">Cash counted</th><th class="n">Difference</th><th>Notes</th></tr></thead><tbody>
-      ${state.cashups.slice(-14).reverse().map(c=>`<tr><td>${new Date(c.date+'T00:00').toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short'})}</td><td class="n">${R(c.total)}</td><td class="n">${R(c.expectedCash)}</td><td class="n">${R(c.counted)}</td><td class="n ${Math.abs(c.diff)<0.005?'diff-ok':'diff-bad'}">${R(c.diff)}</td><td class="wrap">${esc(c.notes||'')}${c.by?` <span class="muted">· ${esc(c.by)}</span>`:''}</td></tr>`).join('')}</tbody></table></div>`:''}
+    ${state.cashups.length?`<div class="page-head"><h2>Recent cash-ups</h2></div><div class="table-wrap"><table><thead><tr><th>Day</th><th class="n">Takings</th><th class="n">Cash expected</th><th class="n">Opening float</th><th class="n">Cash counted</th><th class="n">Difference</th><th class="n">Taken out</th><th class="n">Left in till</th><th>Notes</th></tr></thead><tbody>
+      ${state.cashups.slice(-14).reverse().map(c=>`<tr><td>${new Date(c.date+'T00:00').toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short'})}</td><td class="n">${R(c.total)}</td><td class="n">${R(c.expectedCash)}</td><td class="n">${R(c.float)}</td><td class="n">${R(c.counted)}</td><td class="n ${Math.abs(c.diff)<0.005?'diff-ok':'diff-bad'}">${R(c.diff)}</td><td class="n">${R(c.out||0)}</td><td class="n"><b>${R(closingOf(c))}</b></td><td class="wrap">${esc(c.notes||'')}${c.by?` <span class="muted">· ${esc(c.by)}</span>`:''}</td></tr>`).join('')}</tbody></table></div>`:''}
   </div>`;
 }
 function cuValues(){const f=dayFigures(cuDate);const fl=parseFloat(($('#cu-float')||{}).value)||0;const cashEl=$('#cu-cash'),cardEl=$('#cu-card');
   const counted=cashEl&&cashEl.value!==''?parseFloat(cashEl.value):null;const card=cardEl&&cardEl.value!==''?parseFloat(cardEl.value):null;
-  const expectedCash=r2(fl+(f.mt.Cash||0));return{f,float:r2(fl),counted,card,expectedCash,diff:counted==null?null:r2(counted-expectedCash),cardDiff:card==null?null:r2(card-(f.mt.Card||0))};}
+  const out=r2(parseFloat(($('#cu-out')||{}).value)||0);
+  const expectedCash=r2(fl+(f.mt.Cash||0));return{f,float:r2(fl),counted,card,out,closing:counted==null?null:r2(counted-out),expectedCash,diff:counted==null?null:r2(counted-expectedCash),cardDiff:card==null?null:r2(card-(f.mt.Card||0))};}
 function cuDiffHTML(){const v=cuValues();const cls=d=>Math.abs(d)<0.005?'diff-ok':'diff-bad';const word=d=>Math.abs(d)<0.005?'Balances':d>0?'Over by '+R(d):'Short by '+R(-d);
   return `<div class="trow"><span>Cash expected (float + cash sales${v.f.refunds.some(r=>r.method==='Cash')?' − cash refunds':''})</span><span>${R(v.expectedCash)}</span></div>
     ${v.diff!=null?`<div class="trow"><span>Cash</span><span class="${cls(v.diff)}">${word(v.diff)}</span></div>`:''}
-    ${v.cardDiff!=null?`<div class="trow"><span>Card machine vs system</span><span class="${cls(v.cardDiff)}">${word(v.cardDiff)}</span></div>`:''}`;}
+    ${v.cardDiff!=null?`<div class="trow"><span>Card machine vs system</span><span class="${cls(v.cardDiff)}">${word(v.cardDiff)}</span></div>`:''}
+    ${v.closing!=null?`<div class="trow" style="border-top:1px solid var(--line);margin-top:4px;padding-top:6px"><span><b>Left in the till for tomorrow's float</b></span><span><b>${R(v.closing)}</b></span></div>${v.closing<0?'<div style="color:var(--warn);font-size:13px">More is being taken out than was counted.</div>':''}`:''}`;}
 ACT.saveCashup=()=>{const v=cuValues();if(v.counted==null){toast('Enter the cash counted');return;}
-  logAct('Cash-up',`${cuDate}: takings ${R(v.f.total)}, cash ${Math.abs(v.diff)<0.005?'balances':(v.diff>0?'over ':'short ')+R(Math.abs(v.diff))}`);
-  const rec={id:uid(),date:cuDate,at:new Date().toISOString(),by:who(),float:v.float,counted:r2(v.counted),expectedCash:v.expectedCash,diff:v.diff,cardBatch:v.card,cardDiff:v.cardDiff,total:v.f.total,methods:v.f.mt,refunds:v.f.refunds,invoices:v.f.sales.length,notes:$('#cu-notes').value.trim()};
+  if(v.closing<0){toast('Cash taken out is more than the cash counted');return;}
+  logAct('Cash-up',`${cuDate}: takings ${R(v.f.total)}, float ${R(v.float)}, cash ${Math.abs(v.diff)<0.005?'balances':(v.diff>0?'over ':'short ')+R(Math.abs(v.diff))}${v.out?`, ${R(v.out)} taken out`:''}, ${R(v.closing)} left in till`);
+  const rec={id:uid(),date:cuDate,at:new Date().toISOString(),by:who(),float:v.float,counted:r2(v.counted),out:v.out,closing:v.closing,expectedCash:v.expectedCash,diff:v.diff,cardBatch:v.card,cardDiff:v.cardDiff,total:v.f.total,methods:v.f.mt,refunds:v.f.refunds,invoices:v.f.sales.length,notes:$('#cu-notes').value.trim()};
   state.cashups=state.cashups.filter(c=>c.date!==cuDate);state.cashups.push(rec);state.cashups.sort((a,b)=>a.date.localeCompare(b.date));
   save();render();toast('Cash-up saved'+(Math.abs(v.diff)<0.005?'':': cash '+(v.diff>0?'over':'short')+' by '+R(Math.abs(v.diff))));};
 ACT.printCashup=()=>{const v=cuValues();const st=state.settings;const row=(a,b)=>`<div class="row"><span>${esc(a)}</span><span>${esc(b)}</span></div>`;
@@ -1449,7 +1604,7 @@ ACT.printCashup=()=>{const v=cuValues();const st=state.settings;const row=(a,b)=
     ${row('Invoices',v.f.sales.length)}${Object.entries(v.f.mt).map(([k,a])=>row(k,R(a))).join('')}<div class="row r-total"><span>TOTAL</span><span>${R(v.f.total)}</span></div>
     ${v.f.refunds.length?'<div>Paid back (taken off above):</div>'+v.f.refunds.map(r=>row('  '+r.what+' '+r.method,'-'+R(r.amount))).join(''):''}
     ${v.f.vsold?row('Incl. vouchers sold',R(v.f.vsold)):''}${v.f.discounts?row('Discounts given',R(v.f.discounts)):''}${v.f.voids.length?row(`Voided same day (${v.f.voids.length})`,R(v.f.voids.reduce((a,s)=>a+s.total,0))):''}
-    <div class="r-hr"></div>${row('Float',R(v.float))}${row('Cash expected',R(v.expectedCash))}${v.counted!=null?row('Cash counted',R(v.counted))+row('Difference',R(v.diff)):''}
+    <div class="r-hr"></div>${row('Float',R(v.float))}${row('Cash expected',R(v.expectedCash))}${v.counted!=null?row('Cash counted',R(v.counted))+row('Difference',R(v.diff))+(v.out?row('Taken out (banked/safe)',R(v.out)):'')+row('Left in till (next float)',R(v.closing)):''}
     ${v.card!=null?row('Card machine',R(v.card))+row('Card difference',R(v.cardDiff)):''}<div class="r-hr"></div><div>Counted by: ____________</div><br><div>Checked by: ____________</div></div>`;
   window.print();};
 
@@ -1578,6 +1733,9 @@ document.addEventListener('change',e=>{const t=e.target;
   if(t.id==='us-role'){const r=t.value;$$('#us-perms input').forEach(i=>{i.checked=ROLE_PERMS[r].includes(i.value);i.disabled=r==='owner';});}
   if(t.id==='cu-date'&&t.value){cuDate=t.value;render();}
   if(t.id==='log-who'){logWho=t.value;fillLog();}
+  if(t.id==='r-date'&&t.value){rWeek=mondayOf(t.value);render();}
+  if(t.id==='r-past'){rShowPast=t.checked;render();}
+  if(t.id==='rs-diary'){const on=t.checked;need('roster','change the roster setting',()=>{state.settings.rosterInDiary=on;logAct('Roster setting',on?'Diary follows the roster':'Diary stopped following the roster');save();render();toast(on?'The diary now shows only rostered technicians':'The diary now shows all technicians');});if(!can('roster'))t.checked=!on;}
   if(t.id==='restore-file')restore(t);
 });
 

@@ -25,7 +25,24 @@ Changes to `spoilt-brat-pos.html`. The version before these changes is kept as `
 - When a client is saved, there is a warning for possible duplicates (same cellphone, same email, or a similar name such as "Thandi" / "Thandi M" / "Thandi Mokoena"), with a **Go back** option.
 - Consent source (till or client form) is recorded with the consent date.
 
+## Roster (new tab)
+- **Week grid:** every technician by day, showing **Working**, **Day off**, the type of leave, or **Salon closed**, with the number of bookings. Use ‹ › or the date box to move between weeks.
+- **Usual working days:** untick each technician's regular days off. Days the salon is closed (Settings → Opening hours) are off for everyone.
+- **Leave and time away:**
+  - Types: annual leave, sick leave, family responsibility, study or training, unpaid leave, and other time away.
+  - Each entry has a first and last day and a note, and can be edited or deleted. Leave is in whole days.
+  - You're warned if the technician has bookings during the leave, and two leave entries for the same technician can't overlap.
+- **Changing a single day:** tap any day in the grid to set **Working this day** or **Off this day**, or go back to the usual roster. This is how you bring in a technician who is normally off or on leave. Days changed this way have a pink outline.
+- **Roster in the diary:** with **The diary follows this roster** ticked (the default), each diary day only shows the technicians working that day.
+  - A **Not working** strip lists the others with the reason. **Add to today** brings one in for that day, after a confirmation if they're on leave.
+  - The diary's **Who's working** button also changes that day only.
+  - Untick the option to show all technicians in the diary again.
+- Booking a technician who isn't rostered warns you first, then adds them as working that day.
+- A new **Roster** permission controls who can change the roster. Managers have it; cashiers can view the roster but need a manager's PIN to change it. All roster changes go in the activity log.
+
 ## Cash-up (new tab)
+- **Opening float carries over.** At the cash-up, enter the cash **taken out of the till** (banked or put in the safe). What's left becomes the **opening float of the next cash-up**, filled in automatically with a "Brought forward" note. It can still be changed by hand. If an earlier cash-up is changed afterwards, the later day shows a warning that the amounts no longer match.
+- The cash-up history shows the opening float, the cash taken out and the cash left in the till for each day.
 - The day's takings by payment method, gift vouchers sold, discounts and voids.
 - **Money paid back on the day is taken off.** This covers voucher refunds, and sales from an earlier day that are voided today. The earlier day's figures stay as they were when it was cashed up. A sale rung up and voided on the same day isn't counted at all.
 - Enter the opening float, the cash counted and the card machine total. The tab shows whether cash and card are over or short.
