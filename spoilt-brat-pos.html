@@ -1251,19 +1251,68 @@ function voucherSummaryHTML(v){
     :vStatus(v)==='unsold'?`Pre-printed card (batch ${esc(v.batch)}), created ${fmtD(v.created)}${v.createdBy?' by '+esc(v.createdBy):''}`
     :`Sold on invoice ${v.saleNo} on ${fmtD(v.soldAt||v.created)}${v.buyer?' to '+esc(v.buyer):''}${v.soldBy?' by '+esc(v.soldBy):''}`;
   const uses=(v.uses||[]).map(u=>`<div class="trow"><span>${fmtD(u.date)} · invoice ${u.saleNo}${u.client?' · '+esc(u.client):''}${u.by?' · served by '+esc(u.by):''}${u.note?' · '+esc(u.note):''}</span><span>${u.amount<0?'+'+R(-u.amount):'−'+R(u.amount)}</span></div>`).join('');
-  return `<div style="margin-top:6px"><b>${esc(v.code)}</b> · ${vKind(v)}${v.amount?' · value '+R(v.amount):''}${v.recipient?' · for '+esc(v.recipient):''}</div><div class="muted">${src}</div>
+  const val=vStatus(v)==='unsold'?(+v.presetAmount?' · value '+R(v.presetAmount)+' when sold':''):v.amount?' · value '+R(v.amount):'';
+  const changes=(v.changes||[]).map(c=>`<div class="trow"><span>${fmtD(c.at)} · ${esc(c.by||'?')}${c.approvedBy?' (approved by '+esc(c.approvedBy)+')':''} · ${esc(c.reason)}${c.toName!==c.fromName?` · name: ${esc(c.fromName||'–')} → ${esc(c.toName||'–')}`:''}</span><span>${c.to!==c.from?`${R(c.from)} → ${R(c.to)}`:''}</span></div>`).join('');
+  return `<div style="margin-top:6px"><b>${esc(v.code)}</b> · ${vKind(v)}${val}${v.recipient?' · for '+esc(v.recipient):''}</div><div class="muted">${src}</div>
     ${v.expires?`<div class="muted">Valid until ${fmtD(v.expires)}</div>`:''}${v.cancelReason?`<div class="muted">Cancelled${v.cancelledBy?' by '+esc(v.cancelledBy):''}: ${esc(v.cancelReason)}</div>`:''}
-    ${uses?`<div style="margin-top:8px"><b>Used</b>${uses}</div>`:''}`;}
+    ${changes?`<div style="margin-top:8px"><b>Changes</b>${changes}</div>`:''}${uses?`<div style="margin-top:8px"><b>Used</b>${uses}</div>`:''}`;}
 function fillVoucherTable(){const el=$('#vr-body');if(!el)return;const q=normCode(vrSearch),t=vrSearch.toLowerCase().trim();
   const list=state.vouchers.filter(v=>(vrFilter==='all'||vStatus(v)===vrFilter)&&(!t||normCode(v.code).includes(q)&&q||[v.recipient,v.buyer,v.reason,String(v.saleNo||'')].some(x=>(x||'').toLowerCase().includes(t))||(v.uses||[]).some(u=>String(u.saleNo)===t)))
     .sort((a,b)=>(b.soldAt||b.created).localeCompare(a.soldAt||a.created));
-  el.innerHTML=list.slice(0,300).map(v=>{const st=vStatus(v);return `<tr><td><b>${esc(v.code)}</b></td><td>${vKind(v)}</td><td class="n">${v.amount?R(v.amount):'–'}</td><td class="n">${st==='unsold'?'–':R(v.balance)}</td><td>${esc(v.recipient||'')}</td>
+  el.innerHTML=list.slice(0,300).map(v=>{const st=vStatus(v);return `<tr><td><b>${esc(v.code)}</b></td><td>${vKind(v)}</td><td class="n">${st==='unsold'?(+v.presetAmount?`${R(v.presetAmount)}<br><span class="muted" style="font-size:12px">when sold</span>`:'–'):v.amount?R(v.amount):'–'}</td><td class="n">${st==='unsold'?'–':R(v.balance)}</td><td>${esc(v.recipient||'')}</td>
     <td>${st==='unsold'?'–':fmtD(v.soldAt||v.created)}${v.saleNo?' · inv '+v.saleNo:''}</td><td>${v.expires?fmtD(v.expires):'–'}</td><td><span class="badge st-${st}">${V_LABEL[st]}</span></td>
     <td class="acts"><button data-act="openVoucher" data-id="${v.id}">Open</button></td></tr>`;}).join('')||`<tr><td colspan="9" class="muted">No vouchers here.</td></tr>`;}
 ACT.vrFilter=a=>{vrFilter=a.dataset.f;$$('[data-act="vrFilter"]').forEach(b=>b.classList.toggle('on',b===a));fillVoucherTable();};
-ACT.openVoucher=a=>{const v=state.vouchers.find(x=>x.id===a.dataset.id);if(!v)return;const st=vStatus(v);
+ACT.openVoucher=a=>openVoucher(a.dataset.id);
+function openVoucher(id){const v=state.vouchers.find(x=>x.id===id);if(!v)return;const st=vStatus(v);
+  /* unsold pre-printed card: fill in its value and client, print it, or sell it */
+  if(st==='unsold')return openModal(`<h2>Card ${esc(v.code)} <span class="badge st-unsold">Not sold yet</span></h2>${voucherSummaryHTML(v)}
+    <div class="form-grid" style="margin-top:12px">
+      <label class="fld">Value (R)<input id="cd-amt" type="number" min="1" step="1" inputmode="decimal" value="${+v.presetAmount||''}"></label>
+      <label class="fld">Made out to<input id="cd-for" list="client-names" autocomplete="off" value="${esc(v.recipient||'')}" placeholder="Client name"></label>${clientOptions()}
+    </div>
+    <p class="muted" style="font-size:13px;margin-top:-4px">The card becomes valid for this value once it is sold at the till.</p>
+    <div class="btns"><button class="primary" data-act="sellCard" data-id="${v.id}">Sell at the till</button><button data-act="saveCard" data-id="${v.id}">Save</button><button data-act="saveCard" data-id="${v.id}" data-print="1">Save and print</button>
+      <button class="danger" data-act="cancelVoucher" data-id="${v.id}">Cancel card</button><button class="ghost" data-act="closeModal">Close</button></div>`);
   openModal(`<h2>Voucher ${esc(v.code)} <span class="badge st-${st}">${V_LABEL[st]}</span></h2>${voucherSummaryHTML(v)}
-  <div class="btns">${st==='active'||st==='unsold'?`<button data-act="printVoucher" data-id="${v.id}">Print</button><button class="danger" data-act="cancelVoucher" data-id="${v.id}">Cancel voucher</button>`:''}<button class="ghost" data-act="closeModal">Close</button></div>`);};
+  <div class="btns">${st==='active'?`<button data-act="editVoucher" data-id="${v.id}">Change value or name</button><button data-act="printVoucher" data-id="${v.id}">Print</button><button class="danger" data-act="cancelVoucher" data-id="${v.id}">Cancel voucher</button>`:''}<button class="ghost" data-act="closeModal">Close</button></div>`);}
+/* value and client name typed on an unsold card */
+function readCard(){const amt=r2(parseFloat($('#cd-amt').value)||0);const rec=$('#cd-for').value.trim();return{amt,rec};}
+ACT.saveCard=a=>{const v=state.vouchers.find(x=>x.id===a.dataset.id);if(!v)return;const{amt,rec}=readCard();
+  if($('#cd-amt').value!==''&&!(amt>0)){toast('Enter a value above R0');return;}
+  const before=`${+v.presetAmount?R(v.presetAmount):'no value'}${v.recipient?', '+v.recipient:''}`;
+  v.presetAmount=amt||0;v.recipient=rec;v.recipientId=(findClient(rec)||{}).id||null;
+  logAct('Card details',`${v.code}: ${before} → ${amt?R(amt):'no value'}${rec?', '+rec:''}`);save();render();
+  if(a.dataset.print)printVouchers([v]);toast('Card saved');};
+ACT.sellCard=a=>{const v=state.vouchers.find(x=>x.id===a.dataset.id);if(!v)return;const{amt,rec}=readCard();
+  if(!(amt>0)){toast('Enter the value of the voucher');$('#cd-amt').focus();return;}
+  if(state.cart.lines.some(l=>l.presetCode===v.code)){toast('This card is already on the till');return;}
+  v.presetAmount=amt;v.recipient=rec;v.recipientId=(findClient(rec)||{}).id||null;
+  state.cart.lines.push({key:uid(),techId:null,itemId:null,name:'Gift voucher',type:'voucher',price:amt,cost:0,qty:1,disc:0,recipient:rec,presetCode:v.code});
+  save();closeModal();setTab('till');toast(`Card ${v.code} (${R(amt)}) added to the till. Take payment to activate it.`);};
+/* change the value or name on a voucher that is already valid */
+ACT.editVoucher=a=>{const v=state.vouchers.find(x=>x.id===a.dataset.id);if(!v)return;
+  need('vouchers','change voucher values',ap=>{const used=r2(v.amount-v.balance);
+    openModal(`<h2>Change voucher ${esc(v.code)}</h2><p class="muted" style="margin-top:-6px">Value now ${R(v.amount)}, balance ${R(v.balance)}${used>0?`, ${R(used)} already used`:''}.</p>
+    <div class="form-grid">
+      <label class="fld">New value (R)<input id="ev-amt" type="number" min="${Math.max(used,1)}" step="1" value="${v.amount}"></label>
+      <label class="fld">Made out to<input id="ev-for" list="client-names" autocomplete="off" value="${esc(v.recipient||'')}"></label>${clientOptions()}
+      <label class="fld span2">Reason<input id="ev-reason" autocomplete="off" placeholder="e.g. client topped up R200 (invoice 1012), name spelt wrong"></label>
+    </div>
+    <p class="muted" style="font-size:13px;margin-top:-4px">The balance moves by the same amount as the value. If the client is paying to add value, ring up the payment at the till too, so the money is in the cash-up.</p>
+    <div class="btns"><button class="primary" data-act="saveVoucherEdit" data-id="${v.id}" data-ap="${ap?esc(ap.name):''}">Save change</button><button class="ghost" data-act="openVoucher" data-id="${v.id}">Back</button></div>`);});};
+ACT.saveVoucherEdit=a=>{const v=state.vouchers.find(x=>x.id===a.dataset.id);if(!v)return;
+  const amt=r2(parseFloat($('#ev-amt').value));const rec=$('#ev-for').value.trim();const reason=$('#ev-reason').value.trim();const used=r2(v.amount-v.balance);
+  if(!(amt>0)){toast('Enter the value');return;}
+  if(amt<used-0.004){toast(`${R(used)} has already been spent, so the value can't be less than ${R(used)}`);return;}
+  if(amt===v.amount&&rec===(v.recipient||'')){closeModal();return;}
+  if(!reason){toast('Add a reason');return;}
+  const ap=a.dataset.ap&&a.dataset.ap!==who()?a.dataset.ap:'';const now=new Date().toISOString();
+  const was=`${R(v.amount)}${v.recipient?' for '+v.recipient:''}`;const diff=r2(amt-v.amount);
+  if(!v.changes)v.changes=[];v.changes.push({at:now,by:who(),approvedBy:ap,from:v.amount,to:amt,fromName:v.recipient||'',toName:rec,reason});
+  v.amount=amt;v.balance=r2(v.balance+diff);v.recipient=rec;v.recipientId=(findClient(rec)||{}).id||null;
+  logAct('Changed voucher',`${v.code}: ${was} → ${R(amt)}${rec?' for '+rec:''} (balance now ${R(v.balance)}): ${reason}${ap?' (approved by '+ap+')':''}`);
+  save();render();openVoucher(v.id);toast('Voucher updated');};
 /* issue a free voucher (promotion, birthday, complaint…) — no money changes hands */
 ACT.issueVoucher=()=>need('vouchers','issue free vouchers',ap=>openModal(`<h2>Issue a free voucher</h2><p class="muted" style="margin-top:-6px">For prizes, birthday treats or making up for a complaint. No money is taken.</p><div class="form-grid">
   <label class="fld">Value (R)<input id="iv-amt" type="number" min="1" step="1"></label>
@@ -1279,12 +1328,20 @@ ACT.saveIssued=a=>{const amt=r2(parseFloat($('#iv-amt').value));const reason=$('
 /* pre-printed cards: codes are created now, printed, and only become valid when sold at the till */
 ACT.makeCards=()=>need('vouchers','create voucher cards',()=>openModal(`<h2>Create pre-printed voucher cards</h2>
   <p class="muted" style="margin-top:-6px">Each card gets its own code. Cards are <b>not valid</b> until they are sold at the till, so a lost or stolen card can't be spent.</p>
-  <label class="fld">How many cards<input id="mc-n" type="number" min="1" max="200" step="1" value="10"></label>
+  <div class="form-grid">
+    <label class="fld">How many cards<input id="mc-n" type="number" min="1" max="200" step="1" value="10"></label>
+    <label class="fld">Value on each card (R)<input id="mc-amt" type="number" min="1" step="1" placeholder="Leave blank to fill in later"></label>
+    <label class="fld span2">Made out to (for a single card)<input id="mc-for" list="client-names" autocomplete="off" placeholder="Optional client name"></label>${clientOptions()}
+  </div>
+  <p class="muted" style="font-size:13px;margin-top:-4px">You can also add or change the value and name later: open the card in the register.</p>
   <div class="btns"><button class="primary" data-act="saveCards">Create and print</button><button class="ghost" data-act="closeModal">Cancel</button></div>`));
 ACT.saveCards=()=>{const n=Math.min(200,Math.max(1,parseInt($('#mc-n').value)||0));const now=new Date().toISOString();
+  const amt=r2(parseFloat($('#mc-amt').value)||0);const rec=$('#mc-for').value.trim();
+  if($('#mc-amt').value!==''&&!(amt>0)){toast('Enter a value above R0, or leave it blank');return;}
+  if(rec&&n>1){toast('A client name can only go on a single card. Set "How many cards" to 1.');return;}
   const batch=String(state.vouchers.filter(v=>v.batch).reduce((m,v)=>Math.max(m,+v.batch||0),0)+1);
-  const made=[];for(let i=0;i<n;i++){const v={id:uid(),code:newVoucherCode(),kind:'sold',status:'unsold',batch,amount:0,balance:0,created:now,createdBy:who(),uses:[]};state.vouchers.push(v);made.push(v);}
-  logAct('Created voucher cards',`Batch ${batch}: ${n} cards (${made[0].code} … ${made[n-1].code})`);save();closeModal();render();printVouchers(made);toast(`${n} cards created`);};
+  const made=[];for(let i=0;i<n;i++){const v={id:uid(),code:newVoucherCode(),kind:'sold',status:'unsold',batch,amount:0,balance:0,presetAmount:amt,recipient:rec,recipientId:(findClient(rec)||{}).id||null,created:now,createdBy:who(),uses:[]};state.vouchers.push(v);made.push(v);}
+  logAct('Created voucher cards',`Batch ${batch}: ${n} card${n===1?'':'s'}${amt?' of '+R(amt):''}${rec?' for '+rec:''} (${made[0].code}${n>1?' … '+made[n-1].code:''})`);save();closeModal();render();printVouchers(made);toast(`${n} cards created`);};
 ACT.cancelVoucher=a=>{const v=state.vouchers.find(x=>x.id===a.dataset.id);if(!v)return;
   need('vouchers','cancel vouchers',ap=>openModal(`<h2>Cancel voucher ${esc(v.code)}?</h2><p class="muted" style="margin-top:-6px">It can no longer be used. ${vStatus(v)==='active'?`Balance ${R(v.balance)} will be written off. If the client is being refunded, void the sale instead.`:''}</p>
     <label class="fld">Reason<input id="cv-reason" autocomplete="off" placeholder="e.g. card lost, damaged"></label>
@@ -1297,7 +1354,7 @@ function printVouchers(list){const st=state.settings;
   $('#print-area').innerHTML=list.map(v=>{const card=vStatus(v)==='unsold';
     return `<div class="rcpt vslip"><div class="r-c r-name">${esc(st.name)}</div><div class="r-c">${esc(st.address||'')}</div><div class="r-hr"></div>
     <div class="r-c" style="font-weight:700;letter-spacing:2px">GIFT VOUCHER</div>
-    <div class="vval">${card?'R ____________':R(v.amount)}</div>${v.recipient?`<div class="r-c">For ${esc(v.recipient)}</div>`:''}
+    <div class="vval">${card?(+v.presetAmount?R(v.presetAmount):'R ____________'):R(v.amount)}</div>${v.recipient?`<div class="r-c">For ${esc(v.recipient)}</div>`:card?'<div class="r-c">For ______________________</div>':''}
     <div class="vcode">${esc(v.code)}</div>
     <div class="r-c">${card?`Valid for ${Math.round((+st.voucherMonths||36)/12)} years from the date of sale.<br><b>Not valid unless sold at the till.</b>`:`Valid until ${fmtD(v.expires)}`}</div>
     <div class="r-hr"></div><div style="font-size:11px">Present this voucher when paying. Can be used in part; the balance stays on the code. Not exchangeable for cash.${st.phone?' Tel '+esc(st.phone)+'.':''}</div></div>`;}).join('');
@@ -1467,7 +1524,9 @@ document.addEventListener('input',e=>{const t=e.target;
       if(r.ok&&p.amount>v.balance){p.amount=v.balance;const ai=$(`[data-pay="amount"][data-pid="${p.id}"]`);if(ai)ai.value=p.amount;}}
     save();refreshPayLeft();}}
   if(t.id&&t.id.startsWith('cu-')&&t.id!=='cu-date'){const d=$('#cu-diff');if(d)d.innerHTML=cuDiffHTML();}
-  if(t.id==='gv-card'){const r=cardCheck(t.value);const n=$('#gv-card-note');n.textContent=r.msg;n.style.color=r.ok?'var(--ok)':'var(--warn)';n.style.fontWeight='600';}
+  if(t.id==='gv-card'){const r=cardCheck(t.value);const n=$('#gv-card-note');n.textContent=r.msg;n.style.color=r.ok?'var(--ok)':'var(--warn)';n.style.fontWeight='600';
+    /* a card with a value or name saved on it fills them in (they can still be changed here) */
+    if(r.ok){if(+r.v.presetAmount&&!$('#gv-amt').value)$('#gv-amt').value=r.v.presetAmount;if(r.v.recipient&&!$('#gv-for').value)$('#gv-for').value=r.v.recipient;}}
   if(t.id==='vc-code'){vcCode=t.value;fillVoucherCheck();}
   if(t.id==='log-q'){logQ=t.value;fillLog();}
   if(t.id==='vr-search'){vrSearch=t.value;fillVoucherTable();}

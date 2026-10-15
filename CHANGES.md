@@ -73,6 +73,11 @@ Changes to `spoilt-brat-pos.html`. The version before these changes is kept as `
   - **Pre-printed cards:** created in batches and printed. A card is **not valid until it is sold**. At the till choose **Sell gift voucher → Pre-printed card** and type the code on the card. The register shows how many cards are still unsold, so the physical cards can be counted against it.
   - **Free (issued):** for prizes, birthday treats or complaints. A reason is required, and no money is taken. When spent, it shows as "Free voucher" in reports and the cash-up.
 - **Register:** filter by Valid, Not sold, Used, Expired or Cancelled, and search by code, name or invoice. Shows the amount owed to clients, and can be exported to CSV.
+- **Value and client name on pre-printed cards:**
+  - When creating cards you can set a value for every card in the batch. A client's name can be added when creating a single card.
+  - **Open** any unsold card in the register to type in or change its **Value** and **Made out to** name. Then **Save**, **Save and print** (the slip shows the amount and the name), or **Sell at the till**, which puts the card on the till ready for payment.
+  - At the till, typing a card's code fills in its saved value and name.
+- **Change value or name on a valid voucher.** Open the voucher and choose **Change value or name**. This needs voucher permission or a manager's PIN, plus a reason. The balance moves by the same amount, and the value can't go below what has already been spent. Each change is listed on the voucher and in the activity log. If a client pays to add value, ring the payment up at the till as well, so the money appears in the cash-up.
 - **Print slips** (80mm) for vouchers and pre-printed cards. Vouchers can be cancelled with a reason, for example when a card is lost.
 - **Expiry:** 36 months by default, which is the Consumer Protection Act minimum. It can be changed in Settings.
 
