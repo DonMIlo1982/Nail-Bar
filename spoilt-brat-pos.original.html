@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spoilt Brat — Till</title>
+<style>
+:root{
+  --paper:#FAF7F9;--surface:#FFFFFF;--ink:#2B2130;--muted:#7A6D7F;--line:#E8DEE6;
+  --lacquer:#A3124F;--lacquer-ink:#FFFFFF;--soft:#F6E3EC;--ok:#2E7A63;--warn:#B5501D;
+  --serif:"Didot","Bodoni 72","Bodoni MT","Iowan Old Style",Georgia,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{--paper:#1C161E;--surface:#272029;--ink:#F3ECF2;--muted:#B3A6B5;--line:#3B3140;
+  --lacquer:#E0528F;--lacquer-ink:#1C161E;--soft:#41222F;--ok:#5FC2A3;--warn:#F0A066;color-scheme:dark}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.45 var(--sans)}
+h1,h2{margin:0;font-weight:600}
+h1{font-size:22px}h2{font-size:17px}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 12px;min-height:40px}
+button:hover:not(:disabled){border-color:var(--muted)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--lacquer);border-color:var(--lacquer);color:var(--lacquer-ink);font-weight:600}
+button.danger{color:var(--warn)}
+button.ghost{background:transparent}
+button.block{width:100%;margin-top:8px}
+:focus-visible{outline:2px solid var(--lacquer);outline-offset:2px}
+input,select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);min-height:40px}
+.muted{color:var(--muted)}
+.empty{color:var(--muted);margin:12px 0}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--tc,var(--lacquer));flex:none;box-shadow:inset 0 -3px 0 rgba(0,0,0,.18)}
+
+header{display:flex;align-items:center;gap:28px;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.brand{font-family:var(--serif);font-style:italic;font-size:30px;line-height:1;color:var(--lacquer);letter-spacing:-.5px}
+.brand small{display:block;font:500 12px var(--sans);color:var(--muted);letter-spacing:0;margin-top:3px}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{border:none;background:transparent;border-radius:999px;padding:8px 16px}
+nav button.on{background:var(--ink);color:var(--paper)}
+.today{margin-left:auto;color:var(--muted);font-size:14px}
+
+/* Till */
+.till{display:grid;grid-template-columns:270px 1fr 330px;gap:16px;padding:16px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.catalog{position:sticky;top:84px;max-height:calc(100vh - 100px);display:flex;flex-direction:column;gap:8px}
+.seg{display:flex;gap:4px;flex-wrap:wrap}
+.seg button{flex:1;padding:6px 8px;min-height:36px;font-size:14px}
+.seg button.on{background:var(--soft);border-color:var(--lacquer);color:var(--lacquer);font-weight:600}
+.cat-list{overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px}
+.cat-item{display:grid;grid-template-columns:1fr auto;gap:0 8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);cursor:grab;user-select:none}
+.cat-item:hover{border-color:var(--lacquer)}
+.cat-item.dragging{opacity:.5}
+.cat-item.out{opacity:.5}
+.ci-name{font-weight:600}
+.ci-price{grid-row:span 2;align-self:center;font-variant-numeric:tabular-nums}
+.ci-meta{font-size:13px;color:var(--muted)}
+.hint{font-size:13px;color:var(--muted);margin:4px 0 0}
+.tech-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.tech-card{border:1px solid var(--line);border-left:6px solid var(--tc);border-radius:10px;padding:10px 12px;background:var(--paper);min-height:92px;cursor:pointer;transition:background .15s,border-color .15s}
+.tech-card.active{border-color:var(--tc);background:var(--surface);box-shadow:0 0 0 2px var(--tc)}
+.tech-card.over{background:var(--soft)}
+.tech-card.off{opacity:.55}
+.tc-head{display:flex;align-items:center;gap:8px}
+.tc-head strong{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tc-sub{font-size:14px;font-variant-numeric:tabular-nums}
+.tc-off{font-size:12px;color:var(--muted)}
+.drop-hint{margin-top:10px;border:1px dashed var(--line);border-radius:8px;padding:12px;text-align:center;color:var(--muted);font-size:13px}
+.lines{list-style:none;margin:8px 0 0;padding:0;font-size:14px}
+.lines li{display:grid;grid-template-columns:1fr auto 28px;align-items:center;gap:6px;padding:3px 0;border-top:1px solid var(--line)}
+.lines li span:nth-child(2){font-variant-numeric:tabular-nums}
+.x{min-height:28px;padding:0;width:28px;border:none;background:transparent;color:var(--muted);font-size:18px;line-height:1}
+.x:hover{color:var(--warn)}
+.invoice{position:sticky;top:84px}
+.fld{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);margin-bottom:10px}
+.fld input,.fld select{color:var(--ink);font-size:15px}
+.fld.inline{flex-direction:row;align-items:center;gap:10px;white-space:nowrap}
+.fld.inline input{width:130px}
+.fld-label{font-size:13px;color:var(--muted);margin:10px 0 6px}
+.inv-lines{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:6px 0;margin:6px 0 12px;max-height:34vh;overflow:auto}
+.ig{padding:6px 0}
+.ig-h{display:flex;align-items:center;gap:6px;font-weight:600;font-size:14px;margin-bottom:2px}
+.trow{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:2px 0;font-variant-numeric:tabular-nums}
+.totals{margin:4px 0}
+.grand{font-size:20px;font-weight:700;padding-top:6px;border-top:1px solid var(--line);margin-top:4px}
+
+/* Pages */
+.page{padding:20px;max-width:1150px;margin:0 auto}
+.page.narrow{max-width:760px}
+.page-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:22px 0 10px;flex-wrap:wrap}
+.page-head:first-child{margin-top:0}
+.page-head .fld{margin:0}
+.table-wrap{overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;color:var(--muted);font-size:13px}
+tr:last-child td{border-bottom:none}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+td.acts{text-align:right}
+td.acts button{min-height:32px;padding:4px 10px;margin-left:4px;font-size:13px}
+.badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;margin-left:6px;background:var(--soft);color:var(--lacquer)}
+.badge.ok{background:transparent;color:var(--ok);border:1px solid var(--ok)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:14px}
+.stat{background:var(--surface);padding:14px 16px}
+.stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.stat span{font-size:13px;color:var(--muted)}
+.bar{height:8px;border-radius:4px;background:var(--tc);min-width:2px}
+.bar-cell{width:28%}
+
+/* Diary */
+.diary-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:16px 20px 10px}
+.diary-bar input{width:auto}
+.diary-bar h1{margin-right:8px}
+.spacer{flex:1}
+.diary-wrap{margin:0 20px 20px;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;max-height:calc(100vh - 170px)}
+.diary{display:grid;position:relative}
+.dh{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 8px;font-weight:600;font-size:14px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.times{position:relative;border-right:1px solid var(--line)}
+.times span{position:absolute;right:6px;font-size:12px;color:var(--muted);transform:translateY(-50%)}
+.col{position:relative;border-right:1px solid var(--line);cursor:copy;
+  background-image:repeating-linear-gradient(to bottom,transparent 0,transparent 63px,var(--line) 63px,var(--line) 64px),
+  repeating-linear-gradient(to bottom,transparent 0,transparent 31px,color-mix(in srgb,var(--line) 45%,transparent) 31px,color-mix(in srgb,var(--line) 45%,transparent) 32px)}
+.booking{position:absolute;left:4px;right:4px;border-radius:8px;padding:4px 8px;font-size:12px;line-height:1.3;overflow:hidden;cursor:pointer;
+  background:color-mix(in srgb,var(--tc) 18%,var(--surface));border-left:4px solid var(--tc);color:var(--ink)}
+.booking b{display:block;font-size:13px}
+.booking.done{opacity:.55}
+.booking.arrived{box-shadow:inset 0 0 0 1px var(--tc)}
+
+/* Modal */
+#modal{position:fixed;inset:0;background:rgba(20,10,20,.45);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;z-index:20;overflow:auto}
+#modal[hidden]{display:none}
+.dialog{background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.dialog h2{margin-bottom:14px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.span2{grid-column:span 2}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.check-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chk{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.chk input{width:auto;min-height:0}
+.tech-edit{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.te-row{display:flex;gap:6px}
+.te-row input[type=color]{width:44px;padding:2px;flex:none}
+.page.narrow h2{margin:24px 0 10px}
+label.btn{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;background:var(--surface)}
+.vat-row{display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:10px;grid-column:span 2}
+.vat-row input{width:auto;min-height:0}
+
+/* Clients */
+.bday-strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
+.bday{flex:none;min-width:200px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.bday.today{border-color:var(--lacquer);background:var(--soft)}
+.bday b{display:block}
+.bday .when{font-size:13px;color:var(--lacquer);font-weight:600}
+.bday .btns{margin-top:8px}
+.bday .btns button{min-height:32px;padding:4px 10px;font-size:13px}
+.client-link{display:flex;align-items:center;gap:8px;font-size:13px;margin:-4px 0 10px;flex-wrap:wrap}
+.client-link button{min-height:30px;padding:2px 10px;font-size:13px}
+.client-card{background:var(--soft);border-radius:10px;padding:10px 12px;font-size:13px;margin:-2px 0 12px}
+.client-card .alert{color:var(--warn);font-weight:600}
+.consent-note{font-size:12px;color:var(--muted);margin:-4px 0 10px;grid-column:span 2}
+.cl-search{max-width:320px}
+.hist{margin-top:14px;border-top:1px solid var(--line);padding-top:10px;max-height:220px;overflow:auto;font-size:14px}
+.hist .trow{border-bottom:1px solid var(--line);padding:6px 0}
+td.wrap{white-space:normal;min-width:160px}
+
+/* Receipt */
+.rcpt-preview{background:#fff;color:#111;border-radius:8px;padding:14px;max-width:320px;margin:0 auto 14px;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.rcpt{font:12px/1.4 "Courier New",Courier,monospace}
+.rcpt .row{display:flex;justify-content:space-between;gap:8px}
+.rcpt .r-c{text-align:center}
+.rcpt .r-name{font-size:16px;font-weight:700}
+.rcpt .r-hr{border-top:1px dashed currentColor;margin:6px 0}
+.rcpt .r-tech{font-weight:700;margin-top:4px}
+.rcpt .r-total{font-weight:700;font-size:14px}
+
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:14px;z-index:30;max-width:90vw}
+#toast[hidden]{display:none}
+#print-area{display:none}
+
+@media (max-width:1150px){.till{grid-template-columns:250px 1fr}.invoice{grid-column:span 2;position:static}}
+@media (max-width:760px){
+  .till{grid-template-columns:1fr}.invoice{grid-column:auto}.catalog{position:static;max-height:none}
+  .form-grid,.check-list,.tech-edit{grid-template-columns:1fr}.span2,.vat-row,.consent-note{grid-column:auto}
+  .today{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{
+  @page{size:80mm auto;margin:3mm}
+  body{background:#fff}
+  body>*:not(#print-area){display:none!important}
+  #print-area{display:block;width:74mm;color:#000}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Spoilt Brat<small>Point of sale</small></div>
+  <nav>
+    <button data-act="tab" data-tab="till" class="on">Till</button>
+    <button data-act="tab" data-tab="diary">Diary</button>
+    <button data-act="tab" data-tab="clients">Clients</button>
+    <button data-act="tab" data-tab="stock">Stock &amp; services</button>
+    <button data-act="tab" data-tab="reports">Reports</button>
+    <button data-act="tab" data-tab="settings">Settings</button>
+  </nav>
+  <div class="today" id="today"></div>
+</header>
+<main id="main"><p class="empty" style="padding:20px">Loading…</p></main>
+<div id="modal" hidden data-act="backdrop"><div class="dialog" role="dialog" aria-modal="true" id="modal-body"></div></div>
+<div id="toast" hidden role="status"></div>
+<div id="print-area"></div>
+
+<script>
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+const $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+function R(n){n=Number(n)||0;const[a,b]=Math.abs(n).toFixed(2).split('.');return(n<0?'-':'')+'R'+a.replace(/\B(?=(\d{3})+(?!\d))/g,' ')+'.'+b;}
+const dateStr=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const todayStr=()=>dateStr(new Date());
+const toMin=t=>{const[h,m]=t.split(':').map(Number);return h*60+m};
+const fromMin=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+const fmtDate=d=>new Date(d+'T00:00').toLocaleDateString('en-ZA',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+const csvCell=v=>{v=String(v??'');return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:type||'text/csv'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);}
+let toastTimer;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.hidden=true,3000);}
+
+/* ---------- data ---------- */
+const KEY='spoiltbrat-pos-v1';
+const COLORS=['#C2185B','#7B1FA2','#E0607E','#00897B','#E08A3C','#5C6BC0','#8D6E63','#AD1457','#43A047','#546E7A'];
+const DAY_START=8*60,DAY_END=19*60,SLOT=15,SLOT_H=16;
+function emptyCart(){return{client:'',clientId:null,email:'',method:'',discount:0,lines:[],activeTech:null,bookingIds:[]}}
+function defaults(){return{
+  settings:{name:'Spoilt Brat',address:'Bryanpark Shopping Centre, Bryanston',phone:'',email:'',vatRegistered:false,vatNo:'',footer:'Thank you for visiting. See you soon!'},
+  techs:COLORS.map((c,i)=>({id:'t'+(i+1),name:'Technician '+(i+1),color:c})),
+  items:[
+    {id:uid(),type:'service',name:'Manicure',category:'Hands',cost:0,price:500,duration:45},
+    {id:uid(),type:'service',name:'Pedicure',category:'Feet',cost:0,price:750,duration:60},
+    {id:uid(),type:'service',name:'Paint',category:'Hands',cost:0,price:400,duration:30},
+    {id:uid(),type:'service',name:'False nails',category:'Hands',cost:0,price:1200,duration:90},
+    {id:uid(),type:'product',name:'Cuticle oil (sample)',category:'Retail',code:'',cost:60,price:150,qty:12,low:3}
+  ],
+  clients:[],sales:[],bookings:[],roster:{},nextInv:1001,cart:emptyCart()};}
+let state;
+async function load(){
+  try{if(window.storage){const r=await window.storage.get(KEY,false);if(r&&r.value)state=JSON.parse(r.value);}}catch(e){}
+  if(!state)state=defaults();
+  if(!state.cart)state.cart=emptyCart();
+  if(!state.roster)state.roster={};
+  if(!state.clients)state.clients=[];
+}
+let saveTimer;
+function save(){clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{try{if(window.storage)await window.storage.set(KEY,JSON.stringify(state),false);}catch(e){console.error('Save failed',e);toast('Could not save. Download a backup under Settings.')}},250);}
+const itemById=id=>state.items.find(i=>i.id===id);
+const techById=id=>state.techs.find(t=>t.id===id);
+const techName=id=>(techById(id)||{}).name||'Removed technician';
+const saleById=id=>state.sales.find(s=>s.id===id);
+const bookingById=id=>state.bookings.find(b=>b.id===id);
+const offTechs=d=>state.roster[d]||[];
+const clientById=id=>state.clients.find(c=>c.id===id);
+const findClient=name=>{const n=String(name||'').trim().toLowerCase();return n?state.clients.find(c=>c.name.trim().toLowerCase()===n):null;};
+const clientSales=id=>state.sales.filter(s=>s.clientId===id);
+/* days until next birthday (0 = today); birthday stored as YYYY-MM-DD or --MM-DD */
+function daysToBday(b){
+  if(!b)return null;const m=b.match(/(\d{2})-(\d{2})$/);if(!m)return null;
+  const now=new Date();now.setHours(0,0,0,0);let next=new Date(now.getFullYear(),+m[1]-1,+m[2]);
+  if(next<now)next=new Date(now.getFullYear()+1,+m[1]-1,+m[2]);return Math.round((next-now)/864e5);
+}
+const fmtBday=b=>{const m=(b||'').match(/(\d{2})-(\d{2})$/);return m?new Date(2000,+m[1]-1,+m[2]).toLocaleDateString('en-ZA',{day:'numeric',month:'long'}):'';};
+const bdayWhen=d=>d===0?'Birthday today':d===1?'Birthday tomorrow':'Birthday in '+d+' days';
+function waLink(phone,text){let p=String(phone||'').replace(/\D/g,'');if(p.startsWith('0'))p='27'+p.slice(1);return p?`https://wa.me/${p}?text=${encodeURIComponent(text)}`:null;}
+const clientOptions=()=>`<datalist id="client-names">${state.clients.map(c=>`<option value="${esc(c.name)}">${esc(c.phone||'')}</option>`).join('')}</datalist>`;
+
+/* ---------- navigation ---------- */
+let tab='till';
+const ACT={};
+ACT.tab=a=>setTab(a.dataset.tab);
+function setTab(t){tab=t;$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));render();}
+function render(){$('#today').textContent=fmtDate(todayStr());({till:renderTill,diary:renderDiary,clients:renderClients,stock:renderStock,reports:renderReports,settings:renderSettings})[tab]($('#main'));}
+
+/* ---------- modal ---------- */
+function openModal(html){$('#modal-body').innerHTML=html;$('#modal').hidden=false;const f=$('#modal-body input,#modal-body select,#modal-body button');if(f)f.focus();}
+function closeModal(){$('#modal').hidden=true;$('#modal-body').innerHTML='';}
+ACT.closeModal=closeModal;
+ACT.backdrop=(a,e)=>{if(e.target===a)closeModal()};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#modal').hidden)closeModal()});
+let pendingConfirm=null;
+function confirmModal(title,body,yesLabel,fn){pendingConfirm=fn;openModal(`<h2>${esc(title)}</h2><p class="muted">${esc(body)}</p><div class="btns"><button class="primary" data-act="confirmYes">${esc(yesLabel)}</button><button class="ghost" data-act="closeModal">Cancel</button></div>`);}
+ACT.confirmYes=()=>{const f=pendingConfirm;pendingConfirm=null;closeModal();if(f)f();};
+
+/* ---------- TILL ---------- */
+let catFilter='all',catSearch='';
+function renderTill(m){
+  m.innerHTML=`<div class="till">
+    <section class="panel catalog" aria-label="Services and products">
+      <div class="panel-head"><h2>Services &amp; products</h2></div>
+      <input id="cat-search" type="search" placeholder="Search by name or code" value="${esc(catSearch)}">
+      <div class="seg">${['all','service','product'].map(f=>`<button data-act="catFilter" data-f="${f}" class="${catFilter===f?'on':''}">${{all:'All',service:'Services',product:'Products'}[f]}</button>`).join('')}</div>
+      <div class="cat-list" id="cat-list"></div>
+      <p class="hint">Drag an item onto a technician, or tap a technician and then tap the item.</p>
+    </section>
+    <section class="panel" aria-label="Technicians">
+      <div class="panel-head"><h2>Technicians</h2><span class="muted" style="font-size:13px">Tap to select</span></div>
+      <div class="tech-grid" id="tech-grid"></div>
+    </section>
+    <section class="panel invoice" id="invoice" aria-label="Invoice"></section>
+  </div>`;
+  fillCat();fillTechs();fillInvoice();
+}
+function fillCat(){
+  const el=$('#cat-list');if(!el)return;const q=catSearch.toLowerCase();
+  const items=state.items.filter(i=>(catFilter==='all'||i.type===catFilter)&&(i.name.toLowerCase().includes(q)||(i.code||'').toLowerCase().includes(q)||(i.category||'').toLowerCase().includes(q)));
+  el.innerHTML=items.map(i=>`<div class="cat-item ${i.type==='product'&&i.qty<=0?'out':''}" draggable="true" data-act="tapItem" data-id="${i.id}" role="button" tabindex="0">
+    <span class="ci-name">${esc(i.name)}</span><span class="ci-price">${R(i.price)}</span>
+    <span class="ci-meta">${i.type==='service'?i.duration+' min':(i.qty>0?i.qty+' in stock':'Out of stock')}</span></div>`).join('')
+    ||'<p class="empty">Nothing matches. Add items under Stock &amp; services.</p>';
+}
+function fillTechs(){
+  const el=$('#tech-grid');if(!el)return;const off=offTechs(todayStr());
+  el.innerHTML=state.techs.map(t=>{
+    const lines=state.cart.lines.filter(l=>l.techId===t.id);const sub=lines.reduce((s,l)=>s+l.price*l.qty,0);
+    return `<div class="tech-card ${state.cart.activeTech===t.id?'active':''} ${off.includes(t.id)?'off':''}" data-act="pickTech" data-tech="${t.id}" style="--tc:${t.color}" role="button" tabindex="0" aria-pressed="${state.cart.activeTech===t.id}">
+      <div class="tc-head"><span class="dot"></span><strong>${esc(t.name)}</strong>${lines.length?`<span class="tc-sub">${R(sub)}</span>`:(off.includes(t.id)?'<span class="tc-off">Off today</span>':'')}</div>
+      ${lines.length?`<ul class="lines">${lines.map(l=>`<li><span>${l.qty>1?l.qty+' × ':''}${esc(l.name)}</span><span>${R(l.price*l.qty)}</span><button class="x" data-act="rmLine" data-key="${l.key}" aria-label="Remove one ${esc(l.name)}">×</button></li>`).join('')}</ul>`:'<div class="drop-hint">Drop services or products here</div>'}
+    </div>`;}).join('');
+}
+function cartTotals(){const c=state.cart;const sub=c.lines.reduce((s,l)=>s+l.price*l.qty,0);const disc=Math.min(+c.discount||0,sub);return{sub,disc,total:sub-disc};}
+function totalsHTML(){const{sub,disc,total}=cartTotals();
+  return `<div class="trow"><span>Subtotal</span><span>${R(sub)}</span></div>${disc?`<div class="trow"><span>Discount</span><span>−${R(disc)}</span></div>`:''}${state.settings.vatRegistered?`<div class="trow muted"><span>Includes VAT (15%)</span><span>${R(total*15/115)}</span></div>`:''}<div class="trow grand"><span>Total</span><span>${R(total)}</span></div>`;}
+function fillInvoice(){
+  const el=$('#invoice');if(!el)return;const c=state.cart;
+  const groups=state.techs.map(t=>({t,lines:c.lines.filter(l=>l.techId===t.id)})).filter(g=>g.lines.length);
+  el.innerHTML=`<div class="panel-head"><h2>Invoice</h2><span class="muted">No. ${state.nextInv}</span></div>
+    <label class="fld">Client name<input data-cart="client" list="client-names" value="${esc(c.client)}" placeholder="Type to find a client, or leave for walk-in" autocomplete="off"></label>${clientOptions()}
+    <div id="client-link">${clientLinkHTML()}</div>
+    <label class="fld">Client email<input type="email" data-cart="email" value="${esc(c.email)}" placeholder="For emailing the receipt" autocomplete="off"></label>
+    <div class="inv-lines">${groups.length?groups.map(g=>`<div class="ig"><div class="ig-h" style="--tc:${g.t.color}"><span class="dot"></span>${esc(g.t.name)}</div>${g.lines.map(l=>`<div class="trow"><span>${l.qty>1?l.qty+' × ':''}${esc(l.name)}</span><span>${R(l.price*l.qty)}</span></div>`).join('')}</div>`).join(''):'<p class="empty">Nothing on this invoice yet.</p>'}</div>
+    <label class="fld inline">Discount (R)<input type="number" min="0" step="1" inputmode="decimal" data-cart="discount" value="${c.discount||''}" placeholder="0"></label>
+    <div class="totals" id="inv-totals">${totalsHTML()}</div>
+    <div class="fld-label">Paid by</div>
+    <div class="seg" id="pay-seg">${['Card','Cash','EFT','Online'].map(p=>`<button data-act="pay" data-m="${p}" class="${c.method===p?'on':''}">${p}</button>`).join('')}</div>
+    <button class="primary block" id="inv-complete" data-act="complete" ${c.lines.length?'':'disabled'}>Complete sale ${R(cartTotals().total)}</button>
+    <button class="ghost block" data-act="clearCart" ${c.lines.length||c.client?'':'disabled'}>Clear invoice</button>`;
+}
+function clientLinkHTML(){
+  const c=state.cart;const cl=c.clientId&&clientById(c.clientId);
+  if(cl){const d=daysToBday(cl.birthday);const visits=clientSales(cl.id).length;
+    return `<div class="client-card"><b>${esc(cl.name)}</b>${cl.phone?' · '+esc(cl.phone):''}<br>${visits} previous visit${visits===1?'':'s'}${cl.preferredTech?' · usually sees '+esc(techName(cl.preferredTech)):''}
+      ${d!==null&&d<=7?`<br><b>${bdayWhen(d)}</b>`:''}${cl.allergies?`<br><span class="alert">Allergies: ${esc(cl.allergies)}</span>`:''}${cl.notes?`<br>${esc(cl.notes)}`:''}</div>`;}
+  if((c.client||'').trim())return `<div class="client-link"><span class="muted">Not in your client list.</span><button data-act="saveCartClient">Save as new client</button></div>`;
+  return '';
+}
+function refreshClientLink(){const el=$('#client-link');if(el)el.innerHTML=clientLinkHTML();}
+ACT.saveCartClient=()=>clientForm({name:state.cart.client.trim(),email:(state.cart.email||'').trim(),fromTill:true});
+function updateTotals(){const t=$('#inv-totals');if(t)t.innerHTML=totalsHTML();const b=$('#inv-complete');if(b)b.textContent='Complete sale '+R(cartTotals().total);}
+function addLine(techId,itemId){
+  const it=itemById(itemId);if(!it||!techById(techId))return;
+  if(it.type==='product'){const inCart=state.cart.lines.filter(l=>l.itemId===it.id).reduce((s,l)=>s+l.qty,0);if(inCart+1>(+it.qty||0)){toast(it.qty>0?`Only ${it.qty} × ${it.name} in stock`:`${it.name} is out of stock`);return;}}
+  const ex=state.cart.lines.find(l=>l.techId===techId&&l.itemId===itemId);
+  if(ex)ex.qty++;else state.cart.lines.push({key:uid(),techId,itemId,name:it.name,type:it.type,price:+it.price||0,cost:+it.cost||0,qty:1});
+  state.cart.activeTech=techId;save();fillTechs();fillInvoice();
+}
+ACT.catFilter=a=>{catFilter=a.dataset.f;$$('.catalog .seg button').forEach(b=>b.classList.toggle('on',b.dataset.f===catFilter));fillCat();};
+ACT.pickTech=a=>{state.cart.activeTech=state.cart.activeTech===a.dataset.tech?null:a.dataset.tech;save();fillTechs();};
+ACT.tapItem=a=>{if(!state.cart.activeTech){toast('Select a technician first');return;}addLine(state.cart.activeTech,a.dataset.id);};
+ACT.rmLine=a=>{const c=state.cart;const l=c.lines.find(x=>x.key===a.dataset.key);if(!l)return;if(l.qty>1)l.qty--;else c.lines=c.lines.filter(x=>x!==l);save();fillTechs();fillInvoice();};
+ACT.pay=a=>{state.cart.method=a.dataset.m;save();$$('#pay-seg button').forEach(b=>b.classList.toggle('on',b.dataset.m===a.dataset.m));};
+ACT.clearCart=()=>confirmModal('Clear this invoice?','All items and client details on the current invoice will be removed.','Clear invoice',()=>{state.cart.bookingIds.forEach(id=>{const b=bookingById(id);if(b&&b.status==='arrived')b.status='booked'});state.cart=emptyCart();save();render();});
+ACT.complete=()=>{
+  const c=state.cart;if(!c.lines.length)return;if(!c.method){toast('Choose how the client paid');return;}
+  const{sub,disc,total}=cartTotals();const f=sub?total/sub:1;
+  const sale={id:uid(),no:state.nextInv++,date:new Date().toISOString(),day:todayStr(),client:(c.clientId&&clientById(c.clientId)||{}).name||(c.client||'').trim()||'Walk-in',clientId:c.clientId||null,email:(c.email||'').trim(),method:c.method,subtotal:sub,discount:disc,total,
+    lines:c.lines.map(l=>({...l,techName:techName(l.techId),net:Math.round(l.price*l.qty*f*100)/100}))};
+  sale.lines.forEach(l=>{if(l.type==='product'){const it=itemById(l.itemId);if(it)it.qty=Math.max(0,(+it.qty||0)-l.qty);}});
+  state.bookings.forEach(b=>{if(c.bookingIds.includes(b.id))b.status='done'});
+  state.sales.push(sale);state.cart=emptyCart();save();render();showReceipt(sale);
+  const low=[...new Set(sale.lines.filter(l=>l.type==='product').map(l=>l.itemId))].map(itemById).filter(it=>it&&it.qty<=(+it.low||0));
+  if(low.length)toast('Low stock: '+low.map(i=>`${i.name} (${i.qty} left)`).join(', '));
+};
+
+/* drag and drop */
+document.addEventListener('dragstart',e=>{const it=e.target.closest&&e.target.closest('.cat-item');if(it){e.dataTransfer.setData('text/plain',it.dataset.id);e.dataTransfer.effectAllowed='copy';it.classList.add('dragging');}});
+document.addEventListener('dragend',()=>$$('.dragging,.over').forEach(x=>x.classList.remove('dragging','over')));
+document.addEventListener('dragover',e=>{const tc=e.target.closest&&e.target.closest('.tech-card');$$('.tech-card.over').forEach(x=>x!==tc&&x.classList.remove('over'));if(tc){e.preventDefault();e.dataTransfer.dropEffect='copy';tc.classList.add('over');}});
+document.addEventListener('drop',e=>{const tc=e.target.closest&&e.target.closest('.tech-card');if(tc){e.preventDefault();tc.classList.remove('over');addLine(tc.dataset.tech,e.dataTransfer.getData('text/plain'));}});
+
+/* ---------- RECEIPTS ---------- */
+function receiptHTML(s){
+  const st=state.settings;const d=new Date(s.date);const techIds=[...new Set(s.lines.map(l=>l.techId))];
+  return `<div class="rcpt">
+    <div class="r-c"><div class="r-name">${esc(st.name)}</div>${st.address?esc(st.address)+'<br>':''}${st.phone?'Tel '+esc(st.phone)+'<br>':''}${st.email?esc(st.email)+'<br>':''}${st.vatRegistered&&st.vatNo?'VAT no. '+esc(st.vatNo):''}</div>
+    <div class="r-hr"></div>
+    <div class="row"><span>${st.vatRegistered?'Tax invoice':'Invoice'} ${s.no}</span><span>${d.toLocaleDateString('en-ZA')} ${d.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'})}</span></div>
+    <div>Client: ${esc(s.client)}</div><div class="r-hr"></div>
+    ${techIds.map(id=>{const ls=s.lines.filter(l=>l.techId===id);return `<div class="r-tech">${esc(ls[0].techName||techName(id))}</div>`+ls.map(l=>`<div class="row"><span>${l.qty>1?l.qty+' x ':''}${esc(l.name)}</span><span>${R(l.price*l.qty)}</span></div>`).join('')}).join('')}
+    <div class="r-hr"></div>
+    <div class="row"><span>Subtotal</span><span>${R(s.subtotal)}</span></div>
+    ${s.discount?`<div class="row"><span>Discount</span><span>-${R(s.discount)}</span></div>`:''}
+    <div class="row r-total"><span>Total</span><span>${R(s.total)}</span></div>
+    ${st.vatRegistered?`<div class="row"><span>Incl. VAT 15%</span><span>${R(s.total*15/115)}</span></div>`:''}
+    <div class="row"><span>Paid by</span><span>${esc(s.method)}</span></div>
+    <div class="r-hr"></div><div class="r-c">${esc(st.footer)}</div></div>`;
+}
+function receiptText(s){
+  const st=state.settings;const W=40;const row=(a,b)=>{a=String(a);b=String(b);return a+' '.repeat(Math.max(1,W-a.length-b.length))+b};
+  const out=[st.name,st.address,st.phone?'Tel '+st.phone:'',st.vatRegistered&&st.vatNo?'VAT no. '+st.vatNo:''].filter(Boolean);
+  out.push('-'.repeat(W),`${st.vatRegistered?'Tax invoice':'Invoice'} ${s.no}  ${new Date(s.date).toLocaleString('en-ZA')}`,'Client: '+s.client,'-'.repeat(W));
+  [...new Set(s.lines.map(l=>l.techId))].forEach(id=>{const ls=s.lines.filter(l=>l.techId===id);out.push(ls[0].techName||techName(id));ls.forEach(l=>out.push(row('  '+(l.qty>1?l.qty+' x ':'')+l.name,R(l.price*l.qty))));});
+  out.push('-'.repeat(W),row('Subtotal',R(s.subtotal)));if(s.discount)out.push(row('Discount','-'+R(s.discount)));
+  out.push(row('TOTAL',R(s.total)));if(st.vatRegistered)out.push(row('Incl. VAT 15%',R(s.total*15/115)));
+  out.push(row('Paid by',s.method),'',st.footer);return out.join('\n');
+}
+function showReceipt(s){
+  openModal(`<h2>Invoice ${s.no}</h2><div class="rcpt-preview">${receiptHTML(s)}</div>
+  <label class="fld">Email receipt to<input id="rc-email" type="email" value="${esc(s.email)}" placeholder="client@example.com"></label>
+  <div class="btns"><button class="primary" data-act="printReceipt" data-id="${s.id}">Print receipt</button><button data-act="emailReceipt" data-id="${s.id}">Email receipt</button><button class="ghost" data-act="closeModal">Done</button></div>`);
+}
+ACT.printReceipt=a=>{const s=saleById(a.dataset.id);if(!s)return;$('#print-area').innerHTML=receiptHTML(s);window.print();};
+ACT.emailReceipt=a=>{const s=saleById(a.dataset.id);const to=$('#rc-email').value.trim();if(!to){toast('Enter an email address');return;}s.email=to;save();
+  window.open(`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(`Your receipt from ${state.settings.name} (invoice ${s.no})`)}&body=${encodeURIComponent(receiptText(s))}`,'_blank');};
+ACT.reprint=a=>{const s=saleById(a.dataset.id);if(s)showReceipt(s);};
+
+/* ---------- DIARY ---------- */
+let diaryDate=todayStr();
+function renderDiary(m){
+  const off=offTechs(diaryDate);const techs=state.techs.filter(t=>!off.includes(t.id));
+  const bks=state.bookings.filter(b=>b.date===diaryDate);const H=(DAY_END-DAY_START)/SLOT*SLOT_H;
+  let hours='';for(let t=DAY_START;t<=DAY_END;t+=60)hours+=`<span style="top:${(t-DAY_START)/SLOT*SLOT_H}px">${fromMin(t)}</span>`;
+  m.innerHTML=`<div class="diary-bar">
+    <h1>Diary</h1>
+    <button data-act="dayShift" data-n="-1" aria-label="Previous day">‹</button>
+    <input type="date" id="diary-date" value="${diaryDate}" aria-label="Date">
+    <button data-act="dayShift" data-n="1" aria-label="Next day">›</button>
+    <button data-act="dayToday">Today</button>
+    <span class="muted">${fmtDate(diaryDate)}</span>
+    <span class="spacer"></span>
+    <button data-act="roster">Who's working (${techs.length})</button>
+    <button class="primary" data-act="newBooking">New booking</button>
+  </div>
+  ${techs.length?`<div class="diary-wrap"><div class="diary" style="grid-template-columns:56px repeat(${techs.length},minmax(150px,1fr))">
+    <div class="dh"></div>${techs.map(t=>`<div class="dh" style="--tc:${t.color}"><span class="dot"></span>${esc(t.name)}</div>`).join('')}
+    <div class="times" style="height:${H}px">${hours}</div>
+    ${techs.map(t=>`<div class="col" data-act="colClick" data-tech="${t.id}" style="height:${H}px">${bks.filter(b=>b.techId===t.id).map(b=>bookingBlock(b,t)).join('')}</div>`).join('')}
+  </div></div>`:'<p class="empty" style="padding:0 20px">Nobody is marked as working on this day. Use “Who\'s working” to add technicians.</p>'}
+  ${bks.filter(b=>off.includes(b.techId)).length?`<p class="muted" style="padding:0 20px">Some bookings belong to technicians marked as off today. Mark them as working to see them.</p>`:''}`;
+}
+function bookingBlock(b,t){
+  const it=itemById(b.itemId);const top=(toMin(b.start)-DAY_START)/SLOT*SLOT_H;const h=Math.max(SLOT_H,b.duration/SLOT*SLOT_H)-2;
+  const st={booked:'',arrived:' (at till)',done:' (paid)'}[b.status]||'';
+  return `<div class="booking ${b.status}" data-act="openBooking" data-id="${b.id}" style="top:${top}px;height:${h}px;--tc:${t.color}" role="button" tabindex="0"><b>${esc(b.client)}</b>${b.start} ${esc(it?it.name:'Service')}${st}</div>`;
+}
+ACT.dayShift=a=>{const d=new Date(diaryDate+'T00:00');d.setDate(d.getDate()+(+a.dataset.n));diaryDate=dateStr(d);render();};
+ACT.dayToday=()=>{diaryDate=todayStr();render();};
+ACT.colClick=(a,e)=>{const y=e.clientY-a.getBoundingClientRect().top;const min=Math.min(DAY_END-SLOT,DAY_START+Math.floor(y/SLOT_H)*SLOT);newBooking({techId:a.dataset.tech,start:fromMin(min)});};
+ACT.newBooking=()=>newBooking({});
+function newBooking(p){
+  const svcs=state.items.filter(i=>i.type==='service');if(!svcs.length){toast('Add a service first under Stock & services');return;}
+  const off=offTechs(diaryDate);const first=state.techs.find(t=>!off.includes(t.id))||state.techs[0];
+  bookingForm({date:diaryDate,techId:p.techId||first.id,start:p.start||'09:00',itemId:svcs[0].id,duration:svcs[0].duration||30,client:p.client||'',phone:p.phone||''});
+}
+ACT.openBooking=a=>{const b=bookingById(a.dataset.id);if(b)bookingForm(b);};
+let editingBooking=null;
+function bookingForm(b){
+  editingBooking=b.id||null;const svcs=state.items.filter(i=>i.type==='service');const off=offTechs(b.date);
+  const slots=[];for(let t=DAY_START;t<DAY_END;t+=SLOT)slots.push(fromMin(t));
+  openModal(`<h2>${b.id?'Booking':'New booking'}</h2>
+  <div class="form-grid">
+    <label class="fld">Client name<input id="bk-client" list="client-names" value="${esc(b.client||'')}" autocomplete="off"></label>${clientOptions()}
+    <label class="fld">Phone<input id="bk-phone" type="tel" value="${esc(b.phone||'')}" autocomplete="off"></label>
+    <label class="fld">Service<select id="bk-service">${svcs.map(s=>`<option value="${s.id}" ${s.id===b.itemId?'selected':''}>${esc(s.name)} (${R(s.price)})</option>`).join('')}</select></label>
+    <label class="fld">Technician<select id="bk-tech">${state.techs.map(t=>`<option value="${t.id}" ${t.id===b.techId?'selected':''}>${esc(t.name)}${off.includes(t.id)?' (off)':''}</option>`).join('')}</select></label>
+    <label class="fld">Date<input id="bk-date" type="date" value="${b.date}"></label>
+    <label class="fld">Start time<select id="bk-start">${slots.map(s=>`<option ${s===b.start?'selected':''}>${s}</option>`).join('')}</select></label>
+    <label class="fld">Length (minutes)<input id="bk-dur" type="number" min="15" step="15" value="${b.duration}"></label>
+    <label class="fld">Notes<input id="bk-notes" value="${esc(b.notes||'')}"></label>
+  </div>
+  <div class="btns"><button class="primary" data-act="saveBooking">Save booking</button>${b.id&&b.status!=='done'?`<button data-act="bookingToTill">Send to till</button><button class="danger" data-act="delBooking">Delete</button>`:''}<button class="ghost" data-act="closeModal">Cancel</button></div>`);
+}
+ACT.saveBooking=()=>{
+  const v={client:$('#bk-client').value.trim(),phone:$('#bk-phone').value.trim(),itemId:$('#bk-service').value,techId:$('#bk-tech').value,date:$('#bk-date').value,start:$('#bk-start').value,duration:Math.max(15,Math.round((+$('#bk-dur').value||30)/5)*5),notes:$('#bk-notes').value.trim()};
+  if(!v.client){toast('Add the client’s name');return;}if(!v.date){toast('Choose a date');return;}
+  const linked=findClient(v.client);v.clientId=linked?linked.id:null;
+  const s=toMin(v.start),e=s+v.duration;if(e>DAY_END){toast('That booking runs past closing time ('+fromMin(DAY_END)+')');return;}
+  const clash=state.bookings.find(b=>b.id!==editingBooking&&b.date===v.date&&b.techId===v.techId&&toMin(b.start)<e&&toMin(b.start)+b.duration>s);
+  if(clash){toast(`${techName(v.techId)} already has ${clash.client} at ${clash.start}`);return;}
+  if(editingBooking)Object.assign(bookingById(editingBooking),v);else state.bookings.push({id:uid(),status:'booked',...v});
+  if(offTechs(v.date).includes(v.techId)){state.roster[v.date]=offTechs(v.date).filter(id=>id!==v.techId);}
+  save();closeModal();diaryDate=v.date;render();toast('Booking saved');
+};
+ACT.delBooking=()=>{const id=editingBooking;confirmModal('Delete this booking?','The time slot will become free again.','Delete booking',()=>{state.bookings=state.bookings.filter(b=>b.id!==id);state.cart.bookingIds=state.cart.bookingIds.filter(x=>x!==id);save();render();});};
+ACT.bookingToTill=()=>{
+  const b=bookingById(editingBooking);if(!b)return;if(state.cart.bookingIds.includes(b.id)){toast('This booking is already on the till');return;}
+  const it=itemById(b.itemId);if(!it){toast('That service no longer exists');return;}
+  state.cart.lines.push({key:uid(),techId:b.techId,itemId:it.id,name:it.name,type:'service',price:+it.price||0,cost:+it.cost||0,qty:1});
+  state.cart.bookingIds.push(b.id);
+  if(!state.cart.client){state.cart.client=b.client;const cl=(b.clientId&&clientById(b.clientId))||findClient(b.client);state.cart.clientId=cl?cl.id:null;if(cl&&cl.email&&!state.cart.email)state.cart.email=cl.email;}state.cart.activeTech=b.techId;b.status='arrived';
+  save();closeModal();setTab('till');toast(`${b.client} added to the till under ${techName(b.techId)}`);
+};
+ACT.roster=()=>{const off=offTechs(diaryDate);
+  openModal(`<h2>Who's working</h2><p class="muted" style="margin-top:-6px">${fmtDate(diaryDate)}</p><div class="check-list">${state.techs.map(t=>`<label class="chk"><input type="checkbox" value="${t.id}" ${off.includes(t.id)?'':'checked'}><span class="dot" style="--tc:${t.color}"></span>${esc(t.name)}</label>`).join('')}</div>
+  <div class="btns"><button class="primary" data-act="saveRoster">Save</button><button class="ghost" data-act="closeModal">Cancel</button></div>`);};
+ACT.saveRoster=()=>{state.roster[diaryDate]=$$('.check-list input').filter(i=>!i.checked).map(i=>i.value);save();closeModal();render();};
+
+/* ---------- CLIENTS ---------- */
+let clSearch='';
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function clientStats(id){const s=clientSales(id);return{visits:s.length,spent:s.reduce((a,x)=>a+x.total,0),last:s.length?s[s.length-1].date:null};}
+const bdayMsg=c=>`Happy birthday ${c.name.split(' ')[0]}! From all of us at ${state.settings.name}, enjoy a little birthday treat on your next visit.`;
+function renderClients(m){
+  const up=state.clients.map(c=>({c,d:daysToBday(c.birthday)})).filter(x=>x.d!==null&&x.d<=30).sort((a,b)=>a.d-b.d);
+  const thisMonth=state.clients.filter(c=>{const x=(c.birthday||'').match(/(\d{2})-\d{2}$/);return x&&+x[1]===new Date().getMonth()+1;}).length;
+  const stat=(k,v)=>`<div class="stat"><b>${v}</b><span>${k}</span></div>`;
+  m.innerHTML=`<div class="page">
+    <div class="page-head"><h1>Clients</h1><div class="btns" style="margin:0"><button data-act="csvClients" ${state.clients.length?'':'disabled'}>Export CSV</button><button class="primary" data-act="addClient">Add client</button></div></div>
+    <div class="stats" style="margin-top:0">${stat('Clients',state.clients.length)}${stat('Opted in to specials',state.clients.filter(c=>c.consent).length)}${stat('Birthdays this month',thisMonth)}</div>
+    <div class="page-head"><h2>Birthdays in the next 30 days</h2></div>
+    ${up.length?`<div class="bday-strip">${up.map(({c,d})=>{const wa=waLink(c.phone,bdayMsg(c));return `<div class="bday ${d===0?'today':''}">
+      <span class="when">${bdayWhen(d)}</span><b>${esc(c.name)}</b><span class="muted" style="font-size:13px">${fmtBday(c.birthday)}</span>
+      <div class="btns">${c.consent?`${wa?`<button data-act="openUrl" data-url="${esc(wa)}">WhatsApp wishes</button>`:''}${c.email?`<button data-act="emailBday" data-id="${c.id}">Email</button>`:''}${!wa&&!c.email?'<span class="muted" style="font-size:13px">No phone or email saved</span>':''}`:'<span class="muted" style="font-size:13px">Not opted in to messages</span>'}</div></div>`;}).join('')}</div>`
+      :'<p class="empty">No client birthdays in the next 30 days.</p>'}
+    <div class="page-head"><h2>All clients</h2><input id="cl-search" class="cl-search" type="search" placeholder="Search name, phone or email" value="${esc(clSearch)}"></div>
+    <div class="table-wrap"><table><thead><tr><th>Name</th><th>Phone</th><th>Birthday</th><th>Usually sees</th><th class="n">Visits</th><th class="n">Total spent</th><th>Last visit</th><th>Specials</th><th></th></tr></thead><tbody id="cl-body"></tbody></table></div>
+  </div>`;
+  fillClientTable();
+}
+function fillClientTable(){
+  const el=$('#cl-body');if(!el)return;const q=clSearch.toLowerCase().trim();
+  const list=state.clients.filter(c=>!q||[c.name,c.phone,c.email].some(v=>(v||'').toLowerCase().includes(q))).sort((a,b)=>a.name.localeCompare(b.name));
+  el.innerHTML=list.map(c=>{const s=clientStats(c.id);return `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.phone||'')}</td><td>${fmtBday(c.birthday)}</td><td>${c.preferredTech?esc(techName(c.preferredTech)):''}</td>
+    <td class="n">${s.visits}</td><td class="n">${R(s.spent)}</td><td>${s.last?new Date(s.last).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}):'–'}</td>
+    <td>${c.consent?'<span class="badge ok">Yes</span>':'<span class="muted">No</span>'}</td><td class="acts"><button data-act="editClient" data-id="${c.id}">Open</button></td></tr>`;}).join('')
+    ||`<tr><td colspan="9" class="muted">${state.clients.length?'No clients match your search.':'No clients yet. Add one here, or save a new client straight from the till or a booking.'}</td></tr>`;
+}
+let editingClient=null,clientFromTill=false;
+function clientForm(c){
+  editingClient=c.id||null;clientFromTill=!!c.fromTill;
+  const bm=(c.birthday||'').match(/(\d{2})-(\d{2})$/);const bMonth=bm?+bm[1]:0,bDay=bm?+bm[2]:0;
+  const hist=c.id?clientSales(c.id).slice().reverse():[];const st=c.id?clientStats(c.id):null;
+  openModal(`<h2>${c.id?esc(c.name):'New client'}</h2><div class="form-grid">
+    <label class="fld span2">Full name<input id="cl-name" value="${esc(c.name||'')}" autocomplete="off"></label>
+    <label class="fld">Cellphone<input id="cl-phone" type="tel" value="${esc(c.phone||'')}" placeholder="082 123 4567" autocomplete="off"></label>
+    <label class="fld">Email<input id="cl-email" type="email" value="${esc(c.email||'')}" autocomplete="off"></label>
+    <label class="fld">Birthday day<select id="cl-bday"><option value="0">–</option>${Array.from({length:31},(_,i)=>`<option value="${i+1}" ${bDay===i+1?'selected':''}>${i+1}</option>`).join('')}</select></label>
+    <label class="fld">Birthday month<select id="cl-bmonth"><option value="0">–</option>${MONTHS.map((n,i)=>`<option value="${i+1}" ${bMonth===i+1?'selected':''}>${n}</option>`).join('')}</select></label>
+    <label class="fld span2">Usually sees<select id="cl-tech"><option value="">No preference</option>${state.techs.map(t=>`<option value="${t.id}" ${t.id===c.preferredTech?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label>
+    <label class="fld span2">Allergies or sensitivities (staff only)<input id="cl-allergies" value="${esc(c.allergies||'')}" placeholder="e.g. acrylic sensitivity" autocomplete="off"></label>
+    <label class="fld span2">Notes<input id="cl-notes" value="${esc(c.notes||'')}" placeholder="Favourite colours, nail shape, preferences" autocomplete="off"></label>
+    <label class="vat-row"><input type="checkbox" id="cl-consent" ${c.consent?'checked':''}>Client agreed to receive birthday treats and specials</label>
+    <p class="consent-note">${c.consent&&c.consentDate?'Agreed on '+new Date(c.consentDate).toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'})+'. ':''}Only tick this if the client said yes. POPIA requires their permission before you send marketing.</p>
+  </div>
+  ${st?`<div class="hist"><div class="trow"><b>${st.visits} visit${st.visits===1?'':'s'}</b><b>${R(st.spent)}</b></div>${hist.map(s=>`<div class="trow"><span>${new Date(s.date).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'})} · ${esc([...new Set(s.lines.map(l=>l.name))].join(', '))}<br><span class="muted">${esc([...new Set(s.lines.map(l=>l.techName))].join(', '))}</span></span><span>${R(s.total)}</span></div>`).join('')||'<p class="empty">No visits yet.</p>'}</div>`:''}
+  <div class="btns"><button class="primary" data-act="saveClient">Save client</button>${c.id?`<button data-act="bookClient">Book appointment</button><button class="danger" data-act="delClient">Delete</button>`:''}<button class="ghost" data-act="closeModal">Cancel</button></div>`);
+}
+ACT.addClient=()=>clientForm({});
+ACT.editClient=a=>{const c=clientById(a.dataset.id);if(c)clientForm(c);};
+ACT.saveClient=()=>{
+  const name=$('#cl-name').value.trim().replace(/\s+/g,' ');if(!name){toast('Add the client’s name');return;}
+  const dup=findClient(name);if(dup&&dup.id!==editingClient){toast('A client called '+name+' already exists. Add a surname or initial to tell them apart.');return;}
+  const d=+$('#cl-bday').value,mo=+$('#cl-bmonth').value;
+  if((d&&!mo)||(!d&&mo)){toast('Choose both the day and month of the birthday, or neither');return;}
+  if(d&&mo&&d>new Date(2000,mo,0).getDate()){toast(MONTHS[mo-1]+' doesn’t have '+d+' days');return;}
+  const existing=editingClient&&clientById(editingClient);const consent=$('#cl-consent').checked;
+  const v={name,phone:$('#cl-phone').value.trim(),email:$('#cl-email').value.trim(),birthday:d&&mo?`--${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`:'',
+    preferredTech:$('#cl-tech').value,allergies:$('#cl-allergies').value.trim(),notes:$('#cl-notes').value.trim(),consent,
+    consentDate:consent?((existing&&existing.consent&&existing.consentDate)||new Date().toISOString()):null};
+  let id=editingClient;
+  if(existing){const old=existing.name;Object.assign(existing,v);
+    state.sales.forEach(s=>{if(s.clientId===id)s.client=name});state.bookings.forEach(b=>{if(b.clientId===id)b.client=name});
+    if(state.cart.clientId===id)state.cart.client=name;}
+  else{id=uid();state.clients.push({id,created:new Date().toISOString(),...v});}
+  if(clientFromTill){state.cart.clientId=id;state.cart.client=name;if(v.email&&!state.cart.email)state.cart.email=v.email;}
+  save();closeModal();render();toast(name+' saved');
+};
+ACT.delClient=()=>{const c=clientById(editingClient);if(!c)return;confirmModal(`Delete ${c.name}?`,'Their contact details and birthday will be removed. Past sales stay in your reports under their name.','Delete client',()=>{
+  state.clients=state.clients.filter(x=>x.id!==c.id);state.sales.forEach(s=>{if(s.clientId===c.id)s.clientId=null});state.bookings.forEach(b=>{if(b.clientId===c.id)b.clientId=null});
+  if(state.cart.clientId===c.id)state.cart.clientId=null;save();render();toast(c.name+' deleted');});};
+ACT.bookClient=()=>{const c=clientById(editingClient);if(!c)return;closeModal();tab='diary';$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab==='diary'));render();
+  newBooking({client:c.name,phone:c.phone,techId:c.preferredTech||undefined});};
+ACT.openUrl=a=>window.open(a.dataset.url,'_blank','noopener');
+ACT.emailBday=a=>{const c=clientById(a.dataset.id);if(!c||!c.email)return;window.open(`mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent('Happy birthday from '+state.settings.name)}&body=${encodeURIComponent(bdayMsg(c))}`,'_blank');};
+ACT.csvClients=()=>download(`clients-${todayStr()}.csv`,[['Name','Cellphone','Email','Birthday','Usually sees','Allergies','Notes','Opted in to specials','Visits','Total spent (R)','Last visit'],
+  ...state.clients.map(c=>{const s=clientStats(c.id);return[c.name,c.phone,c.email,fmtBday(c.birthday),c.preferredTech?techName(c.preferredTech):'',c.allergies,c.notes,c.consent?'Yes':'No',s.visits,s.spent.toFixed(2),s.last?new Date(s.last).toLocaleDateString('en-ZA'):''];})].map(r=>r.map(csvCell).join(',')).join('\n'));
+
+/* ---------- STOCK & SERVICES ---------- */
+const margin=i=>(+i.price>0)?Math.round((i.price-(+i.cost||0))/i.price*100)+'%':'–';
+function renderStock(m){
+  const sv=state.items.filter(i=>i.type==='service'),pr=state.items.filter(i=>i.type==='product');
+  m.innerHTML=`<div class="page">
+    <div class="page-head"><h1>Services</h1><button class="primary" data-act="addItem" data-type="service">Add service</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Service</th><th>Category</th><th class="n">Minutes</th><th class="n">Material cost</th><th class="n">Price</th><th class="n">Margin</th><th></th></tr></thead><tbody>
+    ${sv.map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.category)}</td><td class="n">${i.duration}</td><td class="n">${R(i.cost)}</td><td class="n">${R(i.price)}</td><td class="n">${margin(i)}</td><td class="acts"><button data-act="editItem" data-id="${i.id}">Edit</button><button class="danger" data-act="delItem" data-id="${i.id}">Delete</button></td></tr>`).join('')||'<tr><td colspan="7" class="muted">No services yet.</td></tr>'}
+    </tbody></table></div>
+    <div class="page-head"><h1>Retail products</h1><button class="primary" data-act="addItem" data-type="product">Add product</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Product</th><th>Category</th><th>Code</th><th class="n">Cost price</th><th class="n">Retail price</th><th class="n">Margin</th><th class="n">In stock</th><th></th></tr></thead><tbody>
+    ${pr.map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.category)}</td><td>${esc(i.code||'')}</td><td class="n">${R(i.cost)}</td><td class="n">${R(i.price)}</td><td class="n">${margin(i)}</td><td class="n">${i.qty}${i.qty<=(+i.low||0)?'<span class="badge">Reorder</span>':''}</td><td class="acts"><button data-act="receiveStock" data-id="${i.id}">Add stock</button><button data-act="editItem" data-id="${i.id}">Edit</button><button class="danger" data-act="delItem" data-id="${i.id}">Delete</button></td></tr>`).join('')||'<tr><td colspan="8" class="muted">No products yet.</td></tr>'}
+    </tbody></table></div></div>`;
+}
+let editingItem=null;
+function itemForm(it){
+  editingItem=it.id||null;const svc=it.type==='service';
+  openModal(`<h2>${it.id?'Edit':'Add'} ${svc?'service':'product'}</h2><div class="form-grid">
+    <label class="fld span2">Name<input id="it-name" value="${esc(it.name||'')}" autocomplete="off"></label>
+    <label class="fld">Category<input id="it-cat" value="${esc(it.category||'')}" list="cats" autocomplete="off"></label>
+    ${svc?`<label class="fld">Length (minutes)<input id="it-dur" type="number" min="5" step="5" value="${it.duration||30}"></label>`:`<label class="fld">Barcode or code<input id="it-code" value="${esc(it.code||'')}" autocomplete="off"></label>`}
+    <label class="fld">${svc?'Material cost (R)':'Cost price (R)'}<input id="it-cost" type="number" min="0" step="0.01" value="${it.cost??''}"></label>
+    <label class="fld">${svc?'Price (R)':'Retail price (R)'}<input id="it-price" type="number" min="0" step="0.01" value="${it.price??''}"></label>
+    ${svc?'':`<label class="fld">${it.id?'In stock':'Opening stock'}<input id="it-qty" type="number" step="1" value="${it.qty??0}"></label><label class="fld">Reorder when stock reaches<input id="it-low" type="number" min="0" step="1" value="${it.low??2}"></label>`}
+  </div><datalist id="cats">${[...new Set(state.items.map(i=>i.category).filter(Boolean))].map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+  <div class="btns"><button class="primary" data-act="saveItem" data-type="${it.type}">Save ${svc?'service':'product'}</button><button class="ghost" data-act="closeModal">Cancel</button></div>`);
+}
+ACT.addItem=a=>itemForm({type:a.dataset.type});
+ACT.editItem=a=>{const it=itemById(a.dataset.id);if(it)itemForm(it);};
+ACT.saveItem=a=>{
+  const type=a.dataset.type;const name=$('#it-name').value.trim();const price=parseFloat($('#it-price').value);
+  if(!name){toast('Give it a name');return;}if(!(price>=0)){toast('Enter a price');return;}
+  const v={type,name,category:$('#it-cat').value.trim(),cost:Math.max(0,parseFloat($('#it-cost').value)||0),price};
+  if(type==='service')v.duration=Math.max(5,parseInt($('#it-dur').value)||30);
+  else{v.code=$('#it-code').value.trim();v.qty=parseInt($('#it-qty').value)||0;v.low=Math.max(0,parseInt($('#it-low').value)||0);}
+  if(editingItem)Object.assign(itemById(editingItem),v);else state.items.push({id:uid(),...v});
+  save();closeModal();render();toast(`${name} saved`);
+};
+ACT.delItem=a=>{const it=itemById(a.dataset.id);if(!it)return;confirmModal(`Delete ${it.name}?`,'Past sales keep their history. It will no longer appear on the till.','Delete',()=>{state.items=state.items.filter(i=>i.id!==it.id);save();render();});};
+ACT.receiveStock=a=>{const it=itemById(a.dataset.id);if(!it)return;editingItem=it.id;
+  openModal(`<h2>Add stock: ${esc(it.name)}</h2><p class="muted" style="margin-top:-6px">Currently ${it.qty} in stock.</p>
+  <label class="fld">Quantity received<input id="rs-qty" type="number" step="1" value="1"></label>
+  <p class="muted" style="font-size:13px">To write off damaged or used stock, enter a minus number, for example −2.</p>
+  <div class="btns"><button class="primary" data-act="saveStock">Update stock</button><button class="ghost" data-act="closeModal">Cancel</button></div>`);};
+ACT.saveStock=()=>{const it=itemById(editingItem);const n=parseInt($('#rs-qty').value)||0;if(!it||!n){closeModal();return;}it.qty=Math.max(0,(+it.qty||0)+n);save();closeModal();render();toast(`${it.name}: ${it.qty} in stock`);};
+
+/* ---------- REPORTS ---------- */
+let repMonth=todayStr().slice(0,7);
+const monthSales=()=>state.sales.filter(s=>(s.day||s.date.slice(0,10)).slice(0,7)===repMonth);
+function techRows(){
+  const per={};state.techs.forEach(t=>per[t.id]={name:t.name,color:t.color,svc:0,prod:0,count:0,inv:new Set()});
+  monthSales().forEach(s=>s.lines.forEach(l=>{const p=per[l.techId]||(per[l.techId]={name:l.techName||'Removed technician',color:'#999',svc:0,prod:0,count:0,inv:new Set()});
+    if(l.type==='service'){p.svc+=l.net;p.count+=l.qty}else p.prod+=l.net;p.inv.add(s.id);}));
+  return Object.values(per).map(p=>({...p,clients:p.inv.size,total:p.svc+p.prod})).sort((a,b)=>b.total-a.total);
+}
+function renderReports(m){
+  const sales=monthSales();let svc=0,prod=0,cost=0;
+  sales.forEach(s=>s.lines.forEach(l=>{if(l.type==='service')svc+=l.net;else prod+=l.net;cost+=(+l.cost||0)*l.qty;}));
+  const rows=techRows();const max=Math.max(1,...rows.map(r=>r.total));const pr=state.items.filter(i=>i.type==='product');
+  const label=new Date(repMonth+'-01T00:00').toLocaleDateString('en-ZA',{month:'long',year:'numeric'});
+  const stat=(k,v)=>`<div class="stat"><b>${v}</b><span>${k}</span></div>`;
+  m.innerHTML=`<div class="page">
+    <div class="page-head"><h1>Reports for ${label}</h1><label class="fld inline">Month<input id="rep-month" type="month" value="${repMonth}"></label></div>
+    <div class="stats">${stat('Turnover',R(svc+prod))}${stat('Services',R(svc))}${stat('Products',R(prod))}${stat('Gross profit',R(svc+prod-cost))}${stat('Invoices',sales.length)}</div>
+    <div class="page-head"><h2>Turnover by technician</h2><button data-act="csvTech">Export CSV</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Technician</th><th class="n">Clients</th><th class="n">Services done</th><th class="n">Services</th><th class="n">Products</th><th class="n">Total</th><th class="bar-cell"></th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td><span class="dot" style="--tc:${r.color};margin-right:8px;vertical-align:-1px"></span>${esc(r.name)}</td><td class="n">${r.clients}</td><td class="n">${r.count}</td><td class="n">${R(r.svc)}</td><td class="n">${R(r.prod)}</td><td class="n"><b>${R(r.total)}</b></td><td class="bar-cell"><div class="bar" style="--tc:${r.color};width:${r.total/max*100}%"></div></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="page-head"><h2>Stock on hand</h2><button data-act="csvStock">Export CSV</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Product</th><th class="n">In stock</th><th class="n">Reorder at</th><th class="n">Value at cost</th><th class="n">Value at retail</th><th>Status</th></tr></thead><tbody>
+    ${pr.map(i=>`<tr><td>${esc(i.name)}</td><td class="n">${i.qty}</td><td class="n">${i.low}</td><td class="n">${R(i.qty*i.cost)}</td><td class="n">${R(i.qty*i.price)}</td><td>${i.qty<=0?'<span class="badge">Out of stock</span>':i.qty<=i.low?'<span class="badge">Reorder</span>':'<span class="badge ok">OK</span>'}</td></tr>`).join('')||'<tr><td colspan="6" class="muted">No products yet.</td></tr>'}
+    ${pr.length?`<tr><td><b>Total</b></td><td class="n">${pr.reduce((s,i)=>s+(+i.qty||0),0)}</td><td></td><td class="n"><b>${R(pr.reduce((s,i)=>s+i.qty*i.cost,0))}</b></td><td class="n"><b>${R(pr.reduce((s,i)=>s+i.qty*i.price,0))}</b></td><td></td></tr>`:''}
+    </tbody></table></div>
+    <div class="page-head"><h2>Sales in ${label}</h2><button data-act="csvSales">Export CSV</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Invoice</th><th>Date</th><th>Client</th><th>Technicians</th><th>Paid by</th><th class="n">Total</th><th></th></tr></thead><tbody>
+    ${sales.slice().reverse().map(s=>`<tr><td>${s.no}</td><td>${new Date(s.date).toLocaleString('en-ZA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</td><td>${esc(s.client)}</td><td>${esc([...new Set(s.lines.map(l=>l.techName))].join(', '))}</td><td>${esc(s.method)}</td><td class="n">${R(s.total)}</td><td class="acts"><button data-act="reprint" data-id="${s.id}">Receipt</button></td></tr>`).join('')||'<tr><td colspan="7" class="muted">No sales this month yet.</td></tr>'}
+    </tbody></table></div></div>`;
+}
+ACT.csvTech=()=>download(`technician-turnover-${repMonth}.csv`,[['Technician','Clients','Services done','Services (R)','Products (R)','Total (R)'],...techRows().map(r=>[r.name,r.clients,r.count,r.svc.toFixed(2),r.prod.toFixed(2),r.total.toFixed(2)])].map(r=>r.map(csvCell).join(',')).join('\n'));
+ACT.csvStock=()=>download(`stock-${todayStr()}.csv`,[['Product','Category','Code','In stock','Reorder at','Cost price','Retail price','Value at cost','Value at retail'],...state.items.filter(i=>i.type==='product').map(i=>[i.name,i.category,i.code,i.qty,i.low,i.cost,i.price,(i.qty*i.cost).toFixed(2),(i.qty*i.price).toFixed(2)])].map(r=>r.map(csvCell).join(',')).join('\n'));
+ACT.csvSales=()=>{const rows=[['Invoice','Date','Client','Technician','Item','Type','Qty','Price','Line after discount','Paid by']];monthSales().forEach(s=>s.lines.forEach(l=>rows.push([s.no,new Date(s.date).toLocaleString('en-ZA'),s.client,l.techName,l.name,l.type,l.qty,l.price,l.net,s.method])));download(`sales-${repMonth}.csv`,rows.map(r=>r.map(csvCell).join(',')).join('\n'));};
+
+/* ---------- SETTINGS ---------- */
+function renderSettings(m){
+  const st=state.settings;
+  m.innerHTML=`<div class="page narrow"><h1>Settings</h1>
+    <h2>Details on receipts</h2>
+    <div class="form-grid">
+      <label class="fld">Business name<input id="set-name" value="${esc(st.name)}"></label>
+      <label class="fld">Phone<input id="set-phone" value="${esc(st.phone)}"></label>
+      <label class="fld span2">Address<input id="set-address" value="${esc(st.address)}"></label>
+      <label class="fld">Email<input id="set-email" value="${esc(st.email)}"></label>
+      <label class="fld">VAT number<input id="set-vat" value="${esc(st.vatNo)}"></label>
+      <label class="vat-row"><input type="checkbox" id="set-vatreg" ${st.vatRegistered?'checked':''}>VAT registered (prices include 15% VAT, receipts become tax invoices)</label>
+      <label class="fld span2">Message at the bottom of receipts<input id="set-footer" value="${esc(st.footer)}"></label>
+    </div>
+    <h2>Technicians</h2>
+    <div class="tech-edit">${state.techs.map(t=>`<div class="te-row"><input type="color" data-tc="${t.id}" value="${t.color}" aria-label="Colour for ${esc(t.name)}"><input data-tn="${t.id}" value="${esc(t.name)}" aria-label="Name"></div>`).join('')}</div>
+    <div class="btns"><button class="primary" data-act="saveSettings">Save settings</button><button data-act="addTech">Add technician</button></div>
+    <h2>Backup</h2>
+    <p class="muted">Download a copy of all sales, stock and bookings, or restore from a copy.</p>
+    <div class="btns"><button data-act="backup">Download backup</button><label class="btn">Restore backup<input id="restore-file" type="file" accept=".json,application/json" hidden></label><button class="danger" data-act="resetAll">Clear all data</button></div>
+  </div>`;
+}
+ACT.saveSettings=()=>{
+  Object.assign(state.settings,{name:$('#set-name').value.trim()||'Spoilt Brat',phone:$('#set-phone').value.trim(),address:$('#set-address').value.trim(),email:$('#set-email').value.trim(),vatNo:$('#set-vat').value.trim(),vatRegistered:$('#set-vatreg').checked,footer:$('#set-footer').value.trim()});
+  state.techs.forEach(t=>{const n=$(`[data-tn="${t.id}"]`),c=$(`[data-tc="${t.id}"]`);if(n&&n.value.trim())t.name=n.value.trim();if(c)t.color=c.value;});
+  save();render();toast('Settings saved');
+};
+ACT.addTech=()=>{const n=state.techs.length+1;state.techs.push({id:'t'+uid(),name:'Technician '+n,color:COLORS[(n-1)%COLORS.length]});save();render();};
+ACT.backup=()=>download(`spoilt-brat-backup-${todayStr()}.json`,JSON.stringify(state,null,1),'application/json');
+function restore(input){const f=input.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.items||!d.techs)throw 0;confirmModal('Restore this backup?','Everything currently in the system will be replaced with the backup.','Restore',()=>{state=d;if(!state.cart)state.cart=emptyCart();if(!state.roster)state.roster={};if(!state.clients)state.clients=[];save();render();toast('Backup restored');});}catch(e){toast('That file is not a Spoilt Brat backup');}};r.readAsText(f);input.value='';}
+ACT.resetAll=()=>confirmModal('Clear all data?','Every sale, booking, product and setting will be deleted. Download a backup first if you might need it.','Clear everything',()=>{state=defaults();save();render();toast('All data cleared');});
+
+/* ---------- global events ---------- */
+document.addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(!a)return;const f=ACT[a.dataset.act];if(f)f(a,e);});
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[role=button][data-act]')){e.preventDefault();e.target.click();}});
+document.addEventListener('input',e=>{const t=e.target;
+  if(t.dataset.cart){state.cart[t.dataset.cart]=t.dataset.cart==='discount'?Math.max(0,parseFloat(t.value)||0):t.value;
+    if(t.dataset.cart==='client'){const cl=findClient(t.value);state.cart.clientId=cl?cl.id:null;
+      if(cl&&cl.email&&!state.cart.email){state.cart.email=cl.email;const e=$('[data-cart="email"]');if(e)e.value=cl.email;}refreshClientLink();}
+    save();if(t.dataset.cart==='discount')updateTotals();}
+  if(t.id==='bk-client'){const cl=findClient(t.value);if(cl){const p=$('#bk-phone');if(p&&!p.value)p.value=cl.phone||'';const tc=$('#bk-tech');if(tc&&cl.preferredTech&&!editingBooking)tc.value=cl.preferredTech;}}
+  if(t.id==='cl-search'){clSearch=t.value;fillClientTable();}
+  if(t.id==='cat-search'){catSearch=t.value;fillCat();}
+});
+document.addEventListener('change',e=>{const t=e.target;
+  if(t.id==='diary-date'&&t.value){diaryDate=t.value;render();}
+  if(t.id==='rep-month'&&t.value){repMonth=t.value;render();}
+  if(t.id==='bk-service'){const it=itemById(t.value);if(it)$('#bk-dur').value=it.duration||30;}
+  if(t.id==='restore-file')restore(t);
+});
+
+(async()=>{await load();render();})();
+</script>
+</body>
+</html>

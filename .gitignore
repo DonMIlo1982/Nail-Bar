@@ -1,0 +1,5 @@
+.DS_Store
+.claude/
+*.json.bak
+# salon data backups contain client details and PINs: never commit them
+spoilt-brat-backup-*.json
