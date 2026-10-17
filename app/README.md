@@ -15,8 +15,14 @@ The online version of the Spoilt Brat POS: staff logins and a shared client data
 - **Activity log** of logins, client changes, exports, imports and staff changes.
 - Database security rules: every table is limited to active staff with the right permission (see `supabase/migrations`).
 
+## Stage 2
+- **Settings:** receipt details, VAT, gift voucher validity, opening hours, and technicians (colour, commission, order, still working here).
+- **Stock & services:** services (length, material cost, price, margin) and retail products (cost, retail, margin, stock on hand, reorder level, value at cost).
+- **Stock changes:** deliveries, write-offs and stock counts. Each one is recorded with who made it, and stock can't go below zero.
+- **Cost prices** are readable only by staff with the stock permission, enforced in the database.
+
 ## Setting up
-1. In Supabase, open **SQL Editor**, paste `supabase/migrations/0001_stage1.sql` and run it.
+1. In Supabase, open **SQL Editor** and run each file in `supabase/migrations` in order (0001, 0002, ...), once each.
 2. In Supabase, open **Authentication → Sign In / Providers** and switch off **Allow new users to sign up**, so only the owner can add logins.
 3. Copy `.env.local.example` to `.env.local` and fill in the project URL and the anon (publishable) key from Supabase (**Project Settings → API**).
 4. Run `npm install`, then `npm run dev`, and open http://localhost:3000.

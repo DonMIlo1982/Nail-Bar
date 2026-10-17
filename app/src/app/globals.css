@@ -112,3 +112,29 @@ td.acts { text-align: right; }
   .page { padding: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Settings: opening hours, technicians */
+.hours { display: grid; gap: 6px; }
+.hours-row { display: grid; grid-template-columns: 110px 1fr 1fr auto; gap: 8px; align-items: center; font-size: 14px; }
+.tech-line { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.tech-line:first-of-type { border-top: none; }
+.tech-line.inactive { opacity: .6; }
+.tech-line.add { border-top: 1px dashed var(--line); margin-top: 6px; padding-top: 12px; }
+.tech-line .order { display: flex; flex-direction: column; gap: 2px; }
+.tech-line .order button { min-height: 22px; padding: 0 8px; font-size: 12px; }
+.tech-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex: 1; }
+.tech-form input[type="color"] { width: 44px; padding: 2px; flex: none; }
+.tech-form input[name="name"] { flex: 1; min-width: 160px; }
+.pct { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); }
+.pct input { width: 70px; }
+
+/* Stock */
+.seg-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.seg-opt { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 14px; background: var(--surface); }
+.seg-opt input { width: auto; min-height: 0; position: absolute; opacity: 0; pointer-events: none; }
+.seg-opt.on { background: var(--soft); border-color: var(--lacquer); color: var(--lacquer); font-weight: 600; }
+tr.muted td { color: var(--muted); }
+
+@media (max-width: 760px) {
+  .hours-row { grid-template-columns: 1fr 1fr; } .hours-row > span { grid-column: span 2; }
+}

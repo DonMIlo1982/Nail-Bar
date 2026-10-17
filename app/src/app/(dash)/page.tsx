@@ -51,7 +51,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       )}
       <div className="head"><h2>What&apos;s online so far</h2></div>
       <div className="panel small">
-        <p style={{ marginTop: 0 }}>This is the start of the online system. Staff logins and the client database are live. The till, diary, roster, vouchers, cash-up and reports move over next; until then, keep using the POS on the salon computer for those.</p>
+        <p style={{ marginTop: 0 }}>This is the start of the online system. Staff logins, the client database, settings, technicians, and stock and services are live. The diary, roster, till, vouchers, cash-up and reports move over next; until then, keep using the POS on the salon computer for those.</p>
       </div>
     </main>
   );

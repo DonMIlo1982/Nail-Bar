@@ -25,7 +25,8 @@ export default async function DashLayout({ children }: { children: React.ReactNo
   const links = [
     { href: "/", label: "Dashboard" },
     ...(can(staff, "clients") ? [{ href: "/clients", label: "Clients" }] : []),
-    ...(can(staff, "settings") ? [{ href: "/staff", label: "Staff" }, { href: "/import", label: "Import" }] : []),
+    ...(can(staff, "stock") ? [{ href: "/stock", label: "Stock & services" }] : []),
+    ...(can(staff, "settings") ? [{ href: "/settings", label: "Settings" }, { href: "/staff", label: "Staff" }] : []),
   ];
 
   return (
