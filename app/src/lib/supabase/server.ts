@@ -1,16 +1,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { SUPABASE_KEY, SUPABASE_URL } from "./env";
 
-export const supabaseConfigured = () =>
-  !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export const supabaseConfigured = () => !!SUPABASE_URL && !!SUPABASE_KEY;
 
 /** Supabase client for server components, server actions and route handlers.
  *  It acts as the logged-in staff member, so the database security rules apply. */
 export async function createClient() {
   const cookieStore = await cookies();
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    SUPABASE_URL!,
+    SUPABASE_KEY!,
     {
       cookies: {
         getAll() {

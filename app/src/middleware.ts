@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { SUPABASE_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 
 /** Keeps the login session fresh and sends anyone not logged in to /login. */
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = SUPABASE_URL;
+  const key = SUPABASE_KEY;
   if (!url || !key) {
     if (path === "/setup") return NextResponse.next();
     return NextResponse.redirect(new URL("/setup", request.url));
